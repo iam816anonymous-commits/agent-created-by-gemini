@@ -188,9 +188,21 @@ class ActuatorController(private val context: Context) {
         return when (command.actuatorType) {
             ActuatorType.HAPTIC_PULSE -> vibrateHaptic(command.durationMs)
             ActuatorType.HAPTIC_BURST -> vibratePattern()
-            ActuatorType.TORCH_ON -> setTorch(true)
-            ActuatorType.TORCH_OFF -> setTorch(false)
-            ActuatorType.TORCH_TOGGLE -> toggleTorch()
+            ActuatorType.TORCH_ON -> hardwareManager.setTorch(true, com.example.core.model.FlashlightTarget.BACK)
+            ActuatorType.TORCH_OFF -> hardwareManager.setTorch(false, com.example.core.model.FlashlightTarget.DUAL)
+            ActuatorType.TORCH_TOGGLE -> hardwareManager.toggleTorch()
+            ActuatorType.TORCH_FRONT_ON -> hardwareManager.setTorch(true, com.example.core.model.FlashlightTarget.FRONT)
+            ActuatorType.TORCH_BACK_ON -> hardwareManager.setTorch(true, com.example.core.model.FlashlightTarget.BACK)
+            ActuatorType.TORCH_DUAL_ON -> hardwareManager.setTorch(true, com.example.core.model.FlashlightTarget.DUAL)
+            ActuatorType.TORCH_TIMED -> {
+                val sec = command.param.toLongOrNull() ?: (command.durationMs / 1000L).coerceAtLeast(1L)
+                val target = when {
+                    command.param.contains("front", ignoreCase = true) -> com.example.core.model.FlashlightTarget.FRONT
+                    command.param.contains("dual", ignoreCase = true) || command.param.contains("both", ignoreCase = true) -> com.example.core.model.FlashlightTarget.DUAL
+                    else -> com.example.core.model.FlashlightTarget.BACK
+                }
+                hardwareManager.setTorchTimed(target, sec)
+            }
             ActuatorType.AUDIO_TONE -> playTone()
             ActuatorType.AUDIO_VOLUME -> {
                 val percent = command.param.toIntOrNull() ?: 75

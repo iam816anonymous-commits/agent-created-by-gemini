@@ -74,14 +74,25 @@ class HardwareManager(private val context: Context) : SensorEventListener {
     private val _isTorchEnabled = MutableStateFlow(false)
     val isTorchEnabled: StateFlow<Boolean> = _isTorchEnabled.asStateFlow()
 
+    private val _isFrontTorchEnabled = MutableStateFlow(false)
+    val isFrontTorchEnabled: StateFlow<Boolean> = _isFrontTorchEnabled.asStateFlow()
+
+    private val _isBackTorchEnabled = MutableStateFlow(false)
+    val isBackTorchEnabled: StateFlow<Boolean> = _isBackTorchEnabled.asStateFlow()
+
+    private val _torchCountdownSeconds = MutableStateFlow<Int?>(null)
+    val torchCountdownSeconds: StateFlow<Int?> = _torchCountdownSeconds.asStateFlow()
+
     private val _liveSensors = MutableStateFlow(LiveSensorTelemetry())
     val liveSensors: StateFlow<LiveSensorTelemetry> = _liveSensors.asStateFlow()
 
-    private var cameraIdWithFlash: String? = null
+    private var backCameraIdWithFlash: String? = null
+    private var frontCameraIdWithFlash: String? = null
+    private var timedTorchJob: kotlinx.coroutines.Job? = null
 
     init {
         refreshHardwareStates()
-        findCameraWithFlash()
+        findCamerasWithFlash()
         registerStateReceivers()
         registerSensors()
     }
@@ -123,26 +134,24 @@ class HardwareManager(private val context: Context) : SensorEventListener {
         } catch (_: Exception) {}
     }
 
-    private fun findCameraWithFlash() {
+    private fun findCamerasWithFlash() {
         try {
             cameraManager?.let { manager ->
                 for (id in manager.cameraIdList) {
                     val chars = manager.getCameraCharacteristics(id)
                     val flashAvailable = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
                     val facing = chars.get(CameraCharacteristics.LENS_FACING)
-                    if (flashAvailable && facing == CameraCharacteristics.LENS_FACING_BACK) {
-                        cameraIdWithFlash = id
-                        break
-                    }
-                }
-                if (cameraIdWithFlash == null && manager.cameraIdList.isNotEmpty()) {
-                    for (id in manager.cameraIdList) {
-                        val chars = manager.getCameraCharacteristics(id)
-                        if (chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true) {
-                            cameraIdWithFlash = id
-                            break
+                    if (flashAvailable) {
+                        if (facing == CameraCharacteristics.LENS_FACING_BACK && backCameraIdWithFlash == null) {
+                            backCameraIdWithFlash = id
+                        } else if (facing == CameraCharacteristics.LENS_FACING_FRONT && frontCameraIdWithFlash == null) {
+                            frontCameraIdWithFlash = id
                         }
                     }
+                }
+                // Fallback if rear not assigned
+                if (backCameraIdWithFlash == null && manager.cameraIdList.isNotEmpty()) {
+                    backCameraIdWithFlash = manager.cameraIdList.firstOrNull()
                 }
             }
         } catch (_: Exception) {}
@@ -329,21 +338,64 @@ class HardwareManager(private val context: Context) : SensorEventListener {
         }
     }
 
-    fun setTorch(enabled: Boolean): ActuatorResult {
+    fun setTorch(enabled: Boolean, target: com.example.core.model.FlashlightTarget = com.example.core.model.FlashlightTarget.BACK): ActuatorResult {
         return try {
-            if (cameraIdWithFlash == null) findCameraWithFlash()
-            val id = cameraIdWithFlash
-            if (id != null && cameraManager != null) {
-                cameraManager.setTorchMode(id, enabled)
-                _isTorchEnabled.value = enabled
-                ActuatorResult(true, "LED Torch ${if (enabled) "ON" else "OFF"}")
-            } else {
-                _isTorchEnabled.value = enabled
-                ActuatorResult(true, "LED Flashlight state simulated: ${if (enabled) "ON" else "OFF"}")
+            timedTorchJob?.cancel()
+            _torchCountdownSeconds.value = null
+
+            if (backCameraIdWithFlash == null && frontCameraIdWithFlash == null) {
+                findCamerasWithFlash()
             }
+
+            when (target) {
+                com.example.core.model.FlashlightTarget.BACK -> {
+                    backCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
+                    _isBackTorchEnabled.value = enabled
+                    _isTorchEnabled.value = enabled
+                }
+                com.example.core.model.FlashlightTarget.FRONT -> {
+                    frontCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
+                    _isFrontTorchEnabled.value = enabled
+                    _isTorchEnabled.value = enabled
+                }
+                com.example.core.model.FlashlightTarget.DUAL -> {
+                    backCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
+                    frontCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
+                    _isBackTorchEnabled.value = enabled
+                    _isFrontTorchEnabled.value = enabled
+                    _isTorchEnabled.value = enabled
+                }
+            }
+
+            ActuatorResult(
+                true,
+                "${target.label} ${if (enabled) "ON" else "OFF"}"
+            )
         } catch (e: Exception) {
+            _isTorchEnabled.value = enabled
             ActuatorResult(false, "Torch actuation error: ${e.message}")
         }
+    }
+
+    fun setTorchTimed(target: com.example.core.model.FlashlightTarget, durationSeconds: Long): ActuatorResult {
+        val onResult = setTorch(true, target)
+        if (!onResult.isSuccess) return onResult
+
+        timedTorchJob?.cancel()
+        timedTorchJob = scope.launch {
+            for (sec in durationSeconds downTo 1) {
+                _torchCountdownSeconds.value = sec.toInt()
+                kotlinx.coroutines.delay(1000L)
+            }
+            _torchCountdownSeconds.value = null
+            setTorch(false, target)
+        }
+
+        return ActuatorResult(
+            true,
+            "${target.label} activated for ${durationSeconds}s with auto-shutoff",
+            "Auto-shutoff scheduled in ${durationSeconds} seconds"
+        )
     }
 
     fun toggleTorch(): ActuatorResult {

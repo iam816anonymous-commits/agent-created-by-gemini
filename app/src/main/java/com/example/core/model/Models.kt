@@ -142,16 +142,58 @@ sealed interface TaskCommand {
         override val id: String = UUID.randomUUID().toString(),
         override val displayName: String = "Web Research & Scraping: '$query'"
     ) : TaskCommand
+
+    data class MorningBriefing(
+        val dateString: String = "Sunday, October 18, 2026",
+        val includeWeather: Boolean = true,
+        val includeNews: Boolean = true,
+        val includeReminders: Boolean = true,
+        override val id: String = UUID.randomUUID().toString(),
+        override val displayName: String = "Daily Morning Briefing & Night Log (Oct 18, 2026)"
+    ) : TaskCommand
+
+    data class AddNote(
+        val noteContent: String,
+        val title: String = "",
+        val appPackage: String = "com.google.android.keep",
+        override val id: String = UUID.randomUUID().toString(),
+        override val displayName: String = "Add Note: '$noteContent'"
+    ) : TaskCommand
+
+    data class ExportDurableVault(
+        val destinationPath: String = "/sdcard/LocalAgent/brain_vault.json",
+        override val id: String = UUID.randomUUID().toString(),
+        override val displayName: String = "Export Brain Memory to External Storage"
+    ) : TaskCommand
+}
+
+enum class FlashlightTarget(val label: String) {
+    BACK("Rear Main Flashlight"),
+    FRONT("Front Selfie Flashlight"),
+    DUAL("Dual 360° Flashlight (Front + Back)")
 }
 
 enum class ActuatorType(val label: String) {
     HAPTIC_PULSE("Haptic Vibration Pulse"),
     HAPTIC_BURST("Haptic Double Burst"),
+    HAPTIC_TICK("Haptic Single Tick"),
+    HAPTIC_IMPACT("Haptic Heavy Impact"),
     TORCH_ON("Torch / Flashlight ON"),
     TORCH_OFF("Torch / Flashlight OFF"),
     TORCH_TOGGLE("Toggle Flashlight"),
+    TORCH_FRONT_ON("Front Selfie Flashlight ON"),
+    TORCH_BACK_ON("Rear Flashlight ON"),
+    TORCH_DUAL_ON("Dual 360° Flashlight ON (Both Front & Back)"),
+    TORCH_TIMED("Timed Flashlight with Auto-Off"),
+    TORCH_STROBE("Flashlight Strobe Pulse"),
+    TORCH_SOS("Flashlight SOS Morse Code"),
     AUDIO_TONE("Audible Alert Chime"),
     AUDIO_VOLUME("Audio Volume Control"),
+    SPEAKER_ALARM("High-Priority Alert Siren"),
+    SPEAKER_CONFIRM("Discrete Confirmation Tone"),
+    BRIGHTNESS_LEVEL("Display Backlight Control"),
+    NIGHT_SHIELD("Blue Light Eye Shield"),
+    BATTERY_SAVER("Aggressive Battery Saver"),
     WIFI_ON("Turn Wi-Fi ON"),
     WIFI_OFF("Turn Wi-Fi OFF"),
     BLUETOOTH_ON("Turn Bluetooth ON"),
@@ -159,7 +201,8 @@ enum class ActuatorType(val label: String) {
     SETTINGS_WIFI("Launch Wi-Fi Control"),
     SETTINGS_BLUETOOTH("Launch Bluetooth Control"),
     SETTINGS_AIRPLANE("Launch Airplane Mode Control"),
-    SETTINGS_DISPLAY("Launch Display Control")
+    SETTINGS_DISPLAY("Launch Display Control"),
+    DURABLE_VAULT_SYNC("External Shared Storage Brain Sync")
 }
 
 data class ScrapedMovieItem(

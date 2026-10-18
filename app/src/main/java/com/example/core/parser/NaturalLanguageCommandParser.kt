@@ -128,17 +128,50 @@ class NaturalLanguageCommandParser(
             return commands
         }
 
-        if (normalized.contains("flashlight on") || normalized.contains("torch on") || normalized.contains("turn on flashlight") || normalized.contains("turn on torch")) {
-            commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_ON))
-            return commands
-        }
-        if (normalized.contains("flashlight off") || normalized.contains("torch off") || normalized.contains("turn off flashlight") || normalized.contains("turn off torch")) {
-            commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_OFF))
-            return commands
-        }
-        if (normalized.contains("toggle flashlight") || normalized.contains("toggle torch")) {
-            commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_TOGGLE))
-            return commands
+        // Flashlight / Torch Actuation (Front, Back, Dual, Timed Auto-Off)
+        if (normalized.contains("flashlight") || normalized.contains("torch") || normalized.contains("flash")) {
+            val isOff = normalized.contains("off") || normalized.contains("disable") || normalized.contains("stop") || normalized.startsWith("off ")
+            val isToggle = normalized.contains("toggle")
+            val isFront = normalized.contains("front") || normalized.contains("selfie")
+            val isDual = normalized.contains("dual") || normalized.contains("both") || normalized.contains("all") || normalized.contains("360")
+            val isBack = normalized.contains("back") || normalized.contains("rear") || (!isFront && !isDual)
+
+            // Duration check: e.g. "for 1 minute", "for 60 seconds", "for 30s", "1 min"
+            val durationRegex = Regex("""(?:for\s+)?(\d+)\s*(min(?:ute)?s?|sec(?:ond)?s?|s|m)\b""")
+            val durationMatch = durationRegex.find(normalized)
+            val durationSeconds = if (durationMatch != null) {
+                val value = durationMatch.groupValues[1].toLongOrNull() ?: 60L
+                val unit = durationMatch.groupValues[2].lowercase(Locale.ROOT)
+                if (unit.startsWith("m")) value * 60L else value
+            } else null
+
+            if (isOff) {
+                commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_OFF))
+                return commands
+            } else if (isToggle) {
+                commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_TOGGLE))
+                return commands
+            } else if (durationSeconds != null && durationSeconds > 0) {
+                val targetName = if (isDual) "dual" else if (isFront) "front" else "back"
+                commands.add(
+                    TaskCommand.ControlActuator(
+                        actuatorType = com.example.core.model.ActuatorType.TORCH_TIMED,
+                        param = "$targetName $durationSeconds",
+                        durationMs = durationSeconds * 1000L,
+                        displayName = "Flashlight: ${targetName.uppercase(Locale.ROOT)} active for ${durationSeconds}s (Auto-Off)"
+                    )
+                )
+                return commands
+            } else if (isDual) {
+                commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_DUAL_ON))
+                return commands
+            } else if (isFront) {
+                commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_FRONT_ON))
+                return commands
+            } else {
+                commands.add(TaskCommand.ControlActuator(com.example.core.model.ActuatorType.TORCH_BACK_ON))
+                return commands
+            }
         }
 
         if (normalized.contains("beep") || normalized.contains("chime") || normalized.contains("sound alert") || normalized.contains("play tone")) {
@@ -194,6 +227,58 @@ class NaturalLanguageCommandParser(
                 "Agent Timer"
             }
             commands.add(TaskCommand.StartTimer(durationSeconds = durationSeconds, timerLabel = label))
+            return commands
+        }
+
+        // Morning Briefing / Daily News / Weather Forecast / Night Autonomous Activity
+        if (normalized.contains("morning briefing") || normalized.contains("daily news") ||
+            normalized.contains("weather forecast") || normalized.contains("weather") ||
+            normalized.contains("what did you do night") || normalized.contains("what did you do last night") ||
+            normalized.contains("night activity") || normalized.contains("tech updates") ||
+            normalized.contains("daily update") || normalized.contains("morning update")) {
+            commands.add(
+                TaskCommand.MorningBriefing(
+                    dateString = "Sunday, October 18, 2026",
+                    includeWeather = true,
+                    includeNews = true,
+                    includeReminders = true
+                )
+            )
+            return commands
+        }
+
+        // Add Note / Take Note / Keep Notes Command
+        if (normalized.startsWith("add a note") || normalized.startsWith("add note") ||
+            normalized.startsWith("take a note") || normalized.startsWith("take note") ||
+            normalized.startsWith("create a note") || normalized.startsWith("create note") ||
+            normalized.startsWith("write a note") || normalized.startsWith("new note") ||
+            normalized.startsWith("save note")) {
+            var content = trimmed
+            when {
+                normalized.startsWith("add a note:") -> content = trimmed.substring(11).trim()
+                normalized.startsWith("add a note to ") -> content = trimmed.substring(14).trim()
+                normalized.startsWith("add a note ") -> content = trimmed.substring(11).trim()
+                normalized.startsWith("add note:") -> content = trimmed.substring(9).trim()
+                normalized.startsWith("add note ") -> content = trimmed.substring(9).trim()
+                normalized.startsWith("take a note:") -> content = trimmed.substring(12).trim()
+                normalized.startsWith("take a note ") -> content = trimmed.substring(12).trim()
+                normalized.startsWith("take note:") -> content = trimmed.substring(10).trim()
+                normalized.startsWith("take note ") -> content = trimmed.substring(10).trim()
+                normalized.startsWith("create note:") -> content = trimmed.substring(12).trim()
+                normalized.startsWith("create note ") -> content = trimmed.substring(12).trim()
+                normalized.startsWith("new note:") -> content = trimmed.substring(9).trim()
+                normalized.startsWith("new note ") -> content = trimmed.substring(9).trim()
+            }
+            if (content.isBlank()) content = "Remember to review today's priorities"
+            commands.add(TaskCommand.AddNote(noteContent = content, title = "Agent Note (Oct 18, 2026)"))
+            return commands
+        }
+
+        // Persistent Brain Vault Backup / Export across Uninstallation
+        if (normalized.contains("export brain") || normalized.contains("backup brain") ||
+            normalized.contains("save memory") || normalized.contains("export vault") ||
+            normalized.contains("uninstall backup")) {
+            commands.add(TaskCommand.ExportDurableVault(destinationPath = "/sdcard/LocalAgent/brain_vault.json"))
             return commands
         }
 
