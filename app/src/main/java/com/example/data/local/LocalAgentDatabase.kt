@@ -11,6 +11,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "task_executions")
@@ -155,15 +157,74 @@ interface SkillDao {
     suspend fun getSkillCount(): Int
 }
 
+@Entity(tableName = "learning_records")
+data class LearningRecordEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val description: String,
+    val targetAppLabel: String,
+    val resolvedPackageName: String,
+    val intendedTask: String,
+    val requiredPermissionsJson: String,
+    val orderedExecutableStepsJson: String,
+    val targetResolutionRulesJson: String,
+    val preconditionsJson: String,
+    val postconditionsJson: String,
+    val verificationStrategy: String,
+    val knownLimitationsJson: String,
+    val evidenceSummary: String,
+    val successfulExecutions: Int,
+    val failedValidations: Int,
+    val state: String,
+    val userApprovalNote: String?,
+    val createdTimestampMs: Long,
+    val lastValidatedTimestampMs: Long?,
+    val version: Int
+)
+
+@Dao
+interface LearningRecordDao {
+    @Query("SELECT * FROM learning_records ORDER BY createdTimestampMs DESC")
+    fun getAllRecords(): Flow<List<LearningRecordEntity>>
+
+    @Query("SELECT * FROM learning_records ORDER BY createdTimestampMs DESC")
+    suspend fun getAllRecordsSnapshot(): List<LearningRecordEntity>
+
+    @Query("SELECT * FROM learning_records WHERE state = :state ORDER BY createdTimestampMs DESC")
+    fun getRecordsByState(state: String): Flow<List<LearningRecordEntity>>
+
+    @Query("SELECT * FROM learning_records WHERE state = :state ORDER BY createdTimestampMs DESC")
+    suspend fun getRecordsByStateSnapshot(state: String): List<LearningRecordEntity>
+
+    @Query("SELECT * FROM learning_records WHERE id = :id LIMIT 1")
+    suspend fun getRecordById(id: String): LearningRecordEntity?
+
+    @Query("SELECT * FROM learning_records WHERE resolvedPackageName = :packageName AND intendedTask = :task LIMIT 1")
+    suspend fun findByPackageAndTask(packageName: String, task: String): LearningRecordEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecord(record: LearningRecordEntity)
+
+    @Update
+    suspend fun updateRecord(record: LearningRecordEntity)
+
+    @Query("DELETE FROM learning_records WHERE id = :id")
+    suspend fun deleteRecordById(id: String)
+
+    @Query("DELETE FROM learning_records")
+    suspend fun clearAll()
+}
+
 @Database(
     entities = [
         TaskExecutionEntity::class,
         StepRecordEntity::class,
         DiagnosticLogEntity::class,
         SynthesizedTaskEntity::class,
-        SkillEntity::class
+        SkillEntity::class,
+        LearningRecordEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class LocalAgentDatabase : RoomDatabase() {
@@ -172,10 +233,47 @@ abstract class LocalAgentDatabase : RoomDatabase() {
     abstract fun diagnosticLogDao(): DiagnosticLogDao
     abstract fun synthesizedTaskDao(): SynthesizedTaskDao
     abstract fun skillDao(): SkillDao
+    abstract fun learningRecordDao(): LearningRecordDao
 
     companion object {
         @Volatile
         private var INSTANCE: LocalAgentDatabase? = null
+
+        /**
+         * Explicit non-destructive migration from Database v4 to v5.
+         * Adds learning_records table while strictly preserving all existing task executions,
+         * step records, diagnostic logs, synthesized tasks, and legacy skills.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `learning_records` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `targetAppLabel` TEXT NOT NULL,
+                        `resolvedPackageName` TEXT NOT NULL,
+                        `intendedTask` TEXT NOT NULL,
+                        `requiredPermissionsJson` TEXT NOT NULL,
+                        `orderedExecutableStepsJson` TEXT NOT NULL,
+                        `targetResolutionRulesJson` TEXT NOT NULL,
+                        `preconditionsJson` TEXT NOT NULL,
+                        `postconditionsJson` TEXT NOT NULL,
+                        `verificationStrategy` TEXT NOT NULL,
+                        `knownLimitationsJson` TEXT NOT NULL,
+                        `evidenceSummary` TEXT NOT NULL,
+                        `successfulExecutions` INTEGER NOT NULL,
+                        `failedValidations` INTEGER NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `userApprovalNote` TEXT,
+                        `createdTimestampMs` INTEGER NOT NULL,
+                        `lastValidatedTimestampMs` INTEGER,
+                        `version` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
 
         fun getInstance(context: Context): LocalAgentDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -183,7 +281,9 @@ abstract class LocalAgentDatabase : RoomDatabase() {
                     context.applicationContext,
                     LocalAgentDatabase::class.java,
                     "local_agent.db"
-                ).fallbackToDestructiveMigration().build()
+                )
+                .addMigrations(MIGRATION_4_5)
+                .build()
                 INSTANCE = instance
                 instance
             }

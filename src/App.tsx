@@ -158,31 +158,31 @@ interface OvernightLog {
   details: string;
 }
 
-// 23-Phase Governance Architecture
+// Authoritative 23-Phase Governance Architecture (Phase 0 through Phase 22)
 const PHASES_23 = [
-  { phaseNumber: 0, title: 'Execution Verification System', purpose: 'Self-validating build loop', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 1, title: 'Production App Skeleton', purpose: 'Android Gradle & App structure', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 2, title: 'Core Domain Model', purpose: 'TaskCommand, Actuator, ActionPlan', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 3, title: 'NL Parser & Actuator Catalog', purpose: 'Intent regex & fuzzy tokens', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 4, title: 'Accessibility Service & Tree Engine', purpose: 'Node hierarchy scanning', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 5, title: 'App Discovery & Resolution', purpose: 'PackageManager launcher lookup', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 6, title: 'Hardware Actuator Bridges', purpose: 'Camera Flash, Haptics, Radios', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 7, title: 'Input Synthesis Engine', purpose: 'Gestures, clicks, and text injection', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 8, title: 'Multi-Step Execution Pipeline', purpose: 'Deterministic step orchestrator', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 9, title: 'Multi-Modal Verification Engine', purpose: 'Independent condition asserts', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 10, title: 'Procedural Learning Engine', purpose: 'Skill distillation and synthesis', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 11, title: 'Semantic Memory & Fact Store', purpose: 'Confidence-rated graph vault', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 12, title: 'Safety Watchdogs & Kill Switch', purpose: 'Emergency hardware disconnect', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 13, title: 'Pre-Flight Task Approval', purpose: 'Human-in-the-loop review modal', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 14, title: 'Task History & Evidence Vault', purpose: 'Forensic execution logs', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 15, title: 'Resource Profiling & Budgeting', purpose: '<64MB heap, zero wake-locks', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 16, title: 'HUD Overlay & Telemetry', purpose: 'Real-time floating supervisor UI', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 17, title: 'Autonomous Consciousness', purpose: 'Cognitive state & self-reflection', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 18, title: 'Dual-Core Brain (Offline SLM + Web)', purpose: 'Gemma 2B + zero-login proxy', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 19, title: 'Universal Actuator Matrix', purpose: 'Front/Back/Dual Flashlight & Watchdog', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 20, title: 'Daily Morning Intelligence', purpose: 'Overnight audits, weather, news', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 21, title: 'Universal App Interaction (Keep Notes)', purpose: 'App discovery, typing, saving', status: 'ACTIVE_IMPLEMENTED' },
-  { phaseNumber: 22, title: 'Durable Brain Vault (Survives Uninstall)', purpose: 'Shared storage /sdcard persistence', status: 'ACTIVE_IMPLEMENTED' }
+  { phaseNumber: 0, title: 'Governance, Specifications and Reference Audit', purpose: 'Establish project rules, boundaries, and audits', status: 'COMPLETED' },
+  { phaseNumber: 1, title: 'Project Foundation and Build Integrity', purpose: 'Reproducible Android Gradle and build baseline', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 2, title: 'Core Domain Models and Contracts', purpose: 'Deterministic data models, TaskCommand, and states', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 3, title: 'Local Persistence and Execution Records', purpose: 'SQLite/Room schema, migrations, and process restart recovery', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 4, title: 'Command Parsing and Normalization', purpose: 'Convert user instructions into deterministic commands', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 5, title: 'Permission and Capability Management', purpose: 'Runtime feature detection and permission inspection', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 6, title: 'Accessibility Service and Lifecycle', purpose: 'Native Android observation and action integration', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 7, title: 'Observation and Snapshot Engine', purpose: 'Fresh, bounded UI hierarchy capture and differencing', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 8, title: 'Target Resolution, App Control, Action Execution and Verification', purpose: 'PackageManager lookup, explicit launch, dispatch, and verification', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 9, title: 'Console UI', purpose: 'Interface for observing and controlling real agent operations', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 10, title: 'Test Center', purpose: 'Structured unit, integration, and regression reporting', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 11, title: 'Overlay and In-Context Interaction', purpose: 'Permission-controlled floating supervisor surface', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 12, title: 'Skill Registry and Skill Contracts', purpose: 'Structured skills with preconditions and verification strategies', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 13, title: 'Task Planning and Human Approval', purpose: 'Human-in-the-loop pre-flight approval gate', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 14, title: 'Learning Candidate Generation', purpose: 'Extract reusable procedures and useful facts from tasks', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 15, title: 'Persistent Knowledge, Review and Retrieval', purpose: 'Pending-review queue, approval workflow, and restart survival in Room', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 16, title: 'Recovery, Reliability and Failure Learning', purpose: 'Emergency kill switch, typed recovery, and failure adaptation', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 17, title: 'Hardware and System Capability Skills', purpose: 'Camera flash, haptics, and system settings panels', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 18, title: 'Optional AI and Web Research Integration', purpose: 'Zero-login web research and optional intelligence integration', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 19, title: 'Interaction Recording and Skill Synthesis', purpose: 'Workflow recording, command synthesis, and payload encoding', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 20, title: 'Resource Management and Performance', purpose: 'Memory budget limits, storage budgeting, and low-power OLED mode', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 21, title: 'Security, Privacy and Operational Controls', purpose: 'Permission minimization, secret filtering, and hardware disconnect', status: 'ACTIVE_IMPLEMENTED' },
+  { phaseNumber: 22, title: 'End-to-End Validation and Release Readiness', purpose: 'End-to-end task validation, test trace matrix, and release audit', status: 'ACTIVE_IMPLEMENTED' }
 ];
 
 export function App() {
@@ -2166,12 +2166,12 @@ export function App() {
                   </span>
                 </div>
                 <div className="p-1.5 bg-slate-950 border border-slate-900 rounded text-cyan-300 text-[10px] font-bold">
-                  /data/user/0/com.example/databases/localagent_brain.db (Room/SQLite)
+                  /data/user/0/com.aistudio.localagent.tcin/databases/local_agent.db (Room v5, learning_records)
                 </div>
                 <ul className="space-y-1 text-slate-400 text-[10px]">
-                  <li>&bull; <strong className="text-white">Primary:</strong> App-private Room/SQLite with ACID transactions &amp; schema migrations.</li>
-                  <li>&bull; <strong className="text-white">Approved Skills:</strong> Compact, versioned records ({skills.length} verified procedures).</li>
-                  <li>&bull; <strong className="text-amber-400">Pending Learning Queue:</strong> 1 candidate workflow awaiting supervisor review.</li>
+                  <li>&bull; <strong className="text-white">Primary:</strong> App-private Room/SQLite (v5 with non-destructive MIGRATION_4_5 &amp; ACID transactions).</li>
+                  <li>&bull; <strong className="text-white">Approved Skills:</strong> Compact, versioned records ({skills.length} verified procedures in Room).</li>
+                  <li>&bull; <strong className="text-amber-400">Pending Learning Queue:</strong> Survives app restart in learning_records table (awaiting supervisor review).</li>
                   <li>&bull; <strong className="text-emerald-400">External Backups:</strong> User-controlled Storage Access Framework (SAF) export.</li>
                 </ul>
               </div>
