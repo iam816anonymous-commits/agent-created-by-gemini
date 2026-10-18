@@ -59,6 +59,10 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <service
+            android:name=".service.LocalAgentOverlayService"
+            android:exported="false" />
     </application>
 
 </manifest>
