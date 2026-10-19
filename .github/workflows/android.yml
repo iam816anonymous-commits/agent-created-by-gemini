@@ -27,8 +27,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: |
+          echo "Using preinstalled Android SDK at: $ANDROID_HOME"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -36,8 +38,13 @@ jobs:
           gradle-version: '8.10.2'
           cache-read-only: false
 
-      - name: Make Gradlew Executable
-        run: chmod +x ./gradlew
+      - name: Ensure Gradle Wrapper & Permissions
+        run: |
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Generating Gradle wrapper jar..."
+            gradle wrapper --gradle-version 8.10.2
+          fi
+          chmod +x ./gradlew
 
       - name: Run Unit Tests
         run: |
