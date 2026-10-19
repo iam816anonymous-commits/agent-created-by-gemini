@@ -1,0 +1,6 @@
+{
+  "name": "LocalAgent",
+  "description": "Autonomous mobile automation agent using Android Accessibility and local-first execution.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

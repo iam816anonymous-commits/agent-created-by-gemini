@@ -353,11 +353,15 @@ data class SnapshotComparisonDiff(
 data class UiSnapshot(
     val id: String = UUID.randomUUID().toString(),
     val timestampMs: Long = System.currentTimeMillis(),
+    val monotonicTimestampMs: Long = timestampMs,
+    val generationId: Long = 1L,
+    val windowId: Int = 0,
     val packageName: String,
     val windowTitle: String? = null,
     val rootNode: UiNode?,
     val totalNodeCount: Int,
     val isLive: Boolean,
+    val isInteractiveRoot: Boolean = true,
     val sourceDescription: String = if (isLive) "Live Accessibility Observation" else "Local Diagnostic Harness"
 ) {
     val allNodes: List<UiNode> get() = rootNode?.allDescendants ?: emptyList()
