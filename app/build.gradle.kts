@@ -1,5 +1,6 @@
 plugins {
   alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.android)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
@@ -37,15 +38,6 @@ android {
         keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
       }
     }
-    create("debugConfig") {
-      val debugStore = file("${rootDir}/debug.keystore")
-      if (debugStore.exists()) {
-        storeFile = debugStore
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
-    }
   }
 
   buildTypes {
@@ -58,24 +50,20 @@ android {
       val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
       if (releaseKeystore.exists()) {
         signingConfig = signingConfigs.getByName("release")
+      } else {
+        // Fallback to debug signing so CI can produce an installable release test APK
+        signingConfig = signingConfigs.getByName("debug")
       }
     }
     debug {
       isMinifyEnabled = false
-      val debugStore = file("${rootDir}/debug.keystore")
-      if (debugStore.exists()) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      }
+      signingConfig = signingConfigs.getByName("debug")
     }
   }
 
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
-  }
-
-  kotlinOptions {
-    jvmTarget = "17"
   }
 
   buildFeatures {
@@ -108,6 +96,10 @@ android {
     includeInApk = false
     includeInBundle = false
   }
+}
+
+kotlin {
+  jvmToolchain(17)
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
