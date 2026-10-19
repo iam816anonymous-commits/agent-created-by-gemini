@@ -27,10 +27,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK Licenses & Prepare Platforms
         run: |
           echo "Using preinstalled Android SDK at: $ANDROID_HOME"
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -51,26 +52,25 @@ jobs:
 
       - name: Run Unit Tests
         run: |
-          echo "::group::Executing LocalAgent Unit Tests"
-          ./gradlew testDebugUnitTest --continue --stacktrace
-          echo "::endgroup::"
+          ./gradlew :app:testDebugUnitTest --continue --stacktrace
 
       - name: Build Debug APK
         run: |
-          echo "::group::Assembling Debug APK"
-          ./gradlew assembleDebug --stacktrace
-          echo "::endgroup::"
+          ./gradlew :app:assembleDebug --stacktrace
+          echo "Debug build finished with exit code $?"
+          echo "=== APK files found in workspace ==="
+          find . -name "*.apk" -ls || true
 
       - name: Verify Debug APK Output Exists
         run: |
-          DEBUG_APK=$(find app/build/outputs/apk/debug/ -name "*.apk" -type f | head -n 1)
+          DEBUG_APK=$(find . -path "*/outputs/apk/*" -name "*debug*.apk" -type f | head -n 1)
           if [ -z "$DEBUG_APK" ] || [ ! -f "$DEBUG_APK" ]; then
-            DEBUG_APK=$(find app/build/outputs/apk/ -name "*debug*.apk" -type f | head -n 1)
+            DEBUG_APK=$(find . -name "*.apk" -type f | head -n 1)
           fi
           if [ -z "$DEBUG_APK" ] || [ ! -f "$DEBUG_APK" ]; then
             echo "::error::Expected Debug APK was not generated!"
-            echo "Inspecting app/build/outputs directory:"
-            ls -laR app/build/outputs/ || true
+            echo "Inspecting all build directories:"
+            find . -type d -name "build" -exec ls -laR {} + || true
             exit 1
           fi
           echo "DEBUG_APK_PATH=$DEBUG_APK" >> $GITHUB_ENV
@@ -80,16 +80,14 @@ jobs:
         id: build_release
         continue-on-error: true
         run: |
-          echo "::group::Assembling Release APK"
-          ./gradlew assembleRelease --stacktrace
-          RELEASE_APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          ./gradlew :app:assembleRelease --stacktrace || true
+          RELEASE_APK=$(find . -path "*/outputs/apk/*" -name "*release*.apk" -type f | head -n 1)
           if [ -n "$RELEASE_APK" ] && [ -f "$RELEASE_APK" ]; then
             echo "RELEASE_APK_PATH=$RELEASE_APK" >> $GITHUB_ENV
-            echo "Release APK generated at $RELEASE_APK"
+            echo "Release APK generated at: $RELEASE_APK"
           else
             echo "No release APK produced (release signing key may not be configured in CI)."
           fi
-          echo "::endgroup::"
 
       - name: Generate Build & Size Audit Report
         run: |
@@ -98,7 +96,7 @@ jobs:
           echo "| Artifact | Path | Size (MiB) | Size (Bytes) | SHA-256 Checksum |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
 
-          for apk in $(find app/build/outputs/apk/ -name "*.apk"); do
+          for apk in $(find . -path "*/build/outputs/apk/*" -name "*.apk" -type f); do
             BYTES=$(stat -c%s "$apk")
             MIB=$(awk "BEGIN {printf \"%.2f\", $BYTES/1048576}")
             SHA=$(sha256sum "$apk" | awk '{print $1}')
@@ -111,7 +109,7 @@ jobs:
           echo "- **Target Device**: TECNO Camon i Click (IN6 / MediaTek Helio P23)" >> $GITHUB_STEP_SUMMARY
           echo "- **Packaged ABIs**: \`arm64-v8a\`, \`armeabi-v7a\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Min SDK**: 24 (Android 7.0 - fully supports Android 8.1 / API 27)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target SDK**: 35 (Android 15)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target SDK**: 34 (Android 14)" >> $GITHUB_STEP_SUMMARY
           echo "- **R8 Shrinking**: Enabled for Release build" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Debug APK Artifact

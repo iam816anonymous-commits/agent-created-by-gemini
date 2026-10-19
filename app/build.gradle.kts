@@ -8,22 +8,16 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk = 34
 
   defaultConfig {
     applicationId = "com.aistudio.localagent.tcin"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 34
     versionCode = 1
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-    // ABI Filter: Target physical ARM devices (arm64-v8a and armeabi-v7a for TECNO Camon i Click)
-    // Stripping x86 and x86_64 emulator architectures reduces native binary weight by ~60%
-    ndk {
-      abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
-    }
   }
 
   // Signing configurations for local and CI builds
@@ -83,6 +77,12 @@ android {
     }
     jniLibs {
       useLegacyPackaging = false
+      excludes.addAll(listOf(
+        "lib/x86/**",
+        "lib/x86_64/**",
+        "lib/mips/**",
+        "lib/mips64/**"
+      ))
     }
   }
 
