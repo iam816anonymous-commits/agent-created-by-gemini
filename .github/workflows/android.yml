@@ -40,11 +40,14 @@ jobs:
 
       - name: Ensure Gradle Wrapper & Permissions
         run: |
+          mkdir -p gradle/wrapper
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             echo "Generating Gradle wrapper jar..."
             gradle wrapper --gradle-version 8.10.2
           fi
           chmod +x ./gradlew
+          # Ensure .env files exist so secrets-gradle-plugin never fails
+          touch .env app/.env
 
       - name: Run Unit Tests
         run: |
@@ -60,13 +63,18 @@ jobs:
 
       - name: Verify Debug APK Output Exists
         run: |
-          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
-          if [ ! -f "$DEBUG_APK" ]; then
-            echo "::error file=$DEBUG_APK::Expected Debug APK was not generated!"
+          DEBUG_APK=$(find app/build/outputs/apk/debug/ -name "*.apk" -type f | head -n 1)
+          if [ -z "$DEBUG_APK" ] || [ ! -f "$DEBUG_APK" ]; then
+            DEBUG_APK=$(find app/build/outputs/apk/ -name "*debug*.apk" -type f | head -n 1)
+          fi
+          if [ -z "$DEBUG_APK" ] || [ ! -f "$DEBUG_APK" ]; then
+            echo "::error::Expected Debug APK was not generated!"
+            echo "Inspecting app/build/outputs directory:"
+            ls -laR app/build/outputs/ || true
             exit 1
           fi
           echo "DEBUG_APK_PATH=$DEBUG_APK" >> $GITHUB_ENV
-          echo "Debug APK successfully verified at $DEBUG_APK"
+          echo "Debug APK successfully verified at: $DEBUG_APK"
 
       - name: Attempt Release APK Build
         id: build_release
