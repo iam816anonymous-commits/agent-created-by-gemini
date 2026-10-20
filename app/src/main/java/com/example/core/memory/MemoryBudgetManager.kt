@@ -57,4 +57,12 @@ class MemoryBudgetManager(private val context: Context) {
     fun canAcceptNewLearning(currentStorageUsedKb: Long): Boolean {
         return currentStorageUsedKb < MAX_PERSISTENT_STORAGE_KB
     }
+
+    /**
+     * Purges internal transient caches when memory is constrained.
+     * Complies with Priority #3: Never terminates unrelated user applications.
+     */
+    fun purgeTransientCaches() {
+        System.gc()
+    }
 }

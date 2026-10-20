@@ -39,6 +39,19 @@ data class ExecutionPlan(
  */
 class TaskApprovalGate {
 
+    companion object {
+        fun assessRisk(actionDesc: String): RiskLevel {
+            val text = actionDesc.lowercase()
+            return when {
+                text.contains("delete") || text.contains("erase") || text.contains("uninstall") || text.contains("format") -> RiskLevel.CRITICAL
+                text.contains("pay") || text.contains("transfer") || text.contains("send money") || text.contains("purchase") -> RiskLevel.CRITICAL
+                text.contains("password") || text.contains("pin") || text.contains("credential") || text.contains("token") -> RiskLevel.HIGH
+                text.contains("permission") || text.contains("install") || text.contains("settings") -> RiskLevel.MEDIUM
+                else -> RiskLevel.LOW
+            }
+        }
+    }
+
     private var currentPlan: ExecutionPlan? = null
 
     fun proposePlan(
@@ -46,13 +59,19 @@ class TaskApprovalGate {
         resolvedPackage: String?,
         steps: List<ProposedStep>
     ): ExecutionPlan {
-        val hasConsequential = steps.any { it.riskLevel == RiskLevel.HIGH || it.riskLevel == RiskLevel.CRITICAL }
+        val classifiedSteps = steps.map { step ->
+            if (step.riskLevel == RiskLevel.LOW) {
+                step.copy(riskLevel = assessRisk("${step.description} ${step.target}"))
+            } else step
+        }
+
+        val hasConsequential = classifiedSteps.any { it.riskLevel == RiskLevel.HIGH || it.riskLevel == RiskLevel.CRITICAL }
         val plan = ExecutionPlan(
             rawTask = rawTask,
             summary = "Execute task: '$rawTask'",
             resolvedPackage = resolvedPackage,
-            steps = steps,
-            estimatedResourceImpact = if (steps.size > 5) "Medium" else "Low",
+            steps = classifiedSteps,
+            estimatedResourceImpact = if (classifiedSteps.size > 5) "Medium" else "Low",
             requiresElevatedConfirmation = hasConsequential,
             isApproved = false,
             planVersion = 1

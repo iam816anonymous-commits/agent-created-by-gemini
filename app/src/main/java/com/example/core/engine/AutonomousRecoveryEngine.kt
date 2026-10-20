@@ -12,6 +12,10 @@ import com.example.core.model.VerificationRule
 import com.example.core.research.WebResearchEngine
 import com.example.data.storage.DurableMemoryStorageManager
 
+import com.example.core.reflection.InterruptionDetector
+import com.example.core.reflection.InterruptionType
+import com.example.core.reflection.StateSignatureHasher
+
 data class AdaptedRecoveryPlan(
     val strategyName: String,
     val reasoning: String,
@@ -29,6 +33,22 @@ class AutonomousRecoveryEngine(
         preSnapshot: UiSnapshot?,
         durableStorage: DurableMemoryStorageManager?
     ): AdaptedRecoveryPlan {
+        // Studied from Mobile-Agent-v2 (Reflection Unit):
+        // First check if an unexpected system modal / permission dialog is blocking the foreground
+        val interruption = InterruptionDetector.assessSnapshot(preSnapshot)
+        if (interruption.isInterrupted && interruption.dismissCommand != null) {
+            return AdaptedRecoveryPlan(
+                strategyName = "Interruption Bypass & Task Continuation (${interruption.type})",
+                reasoning = "${interruption.description} Bypassing blocking dialog before retrying original action.",
+                alternativeCommands = listOf(
+                    interruption.dismissCommand,
+                    TaskCommand.Delay(durationMs = 500L),
+                    failedCommand
+                ),
+                searchSummary = "Automated interruption reflection resolved modal block."
+            )
+        }
+
         val targetDesc = when (failedCommand) {
             is TaskCommand.ClickElement -> failedCommand.targetLabel
             is TaskCommand.EnterText -> failedCommand.selector.text ?: "Input"

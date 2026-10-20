@@ -58,7 +58,21 @@ class TaskSynthesizer {
 
             when (event.actionType) {
                 ActionType.TAP -> {
-                    val selector = event.targetSelector ?: TargetSelector(text = event.targetLabel)
+                    val (normX, normY) = if (event.touchCoordinates != null) {
+                        val screenW = 1080f
+                        val screenH = 2400f
+                        Pair(
+                            (event.touchCoordinates.first / screenW).coerceIn(0f, 1f),
+                            (event.touchCoordinates.second / screenH).coerceIn(0f, 1f)
+                        )
+                    } else Pair(null, null)
+
+                    val rawSelector = event.targetSelector ?: TargetSelector(text = event.targetLabel)
+                    val selector = rawSelector.copy(
+                        fallbackNormalizedX = normX,
+                        fallbackNormalizedY = normY
+                    )
+
                     commands.add(
                         TaskCommand.ClickElement(
                             selector = selector,
@@ -79,7 +93,13 @@ class TaskSynthesizer {
                 }
 
                 ActionType.ENTER_TEXT -> {
-                    val textToEnter = event.textPayload ?: ""
+                    // Studied from Tencent AppAgent: Deduplicate consecutive keystroke events on the same field
+                    var textToEnter = event.textPayload ?: ""
+                    while (i + 1 < interactions.size && interactions[i + 1].actionType == ActionType.ENTER_TEXT) {
+                        textToEnter = interactions[i + 1].textPayload ?: textToEnter
+                        i++
+                    }
+
                     val selector = event.targetSelector ?: TargetSelector(className = "EditText")
                     commands.add(
                         TaskCommand.EnterText(
@@ -147,7 +167,7 @@ class TaskSynthesizer {
         return commands.joinToString("\n") { cmd ->
             when (cmd) {
                 is TaskCommand.LaunchApp -> "LAUNCH|${cmd.packageName}|${cmd.appName}"
-                is TaskCommand.ClickElement -> "CLICK|${cmd.selector.text ?: ""}|${cmd.selector.contentDescription ?: ""}|${cmd.selector.resourceId ?: ""}|${cmd.targetLabel}"
+                is TaskCommand.ClickElement -> "CLICK|${cmd.selector.text ?: ""}|${cmd.selector.contentDescription ?: ""}|${cmd.selector.resourceId ?: ""}|${cmd.targetLabel}|${cmd.selector.fallbackNormalizedX ?: ""}|${cmd.selector.fallbackNormalizedY ?: ""}"
                 is TaskCommand.EnterText -> "ENTER_TEXT|${cmd.textToEnter}|${cmd.selector.text ?: ""}|${cmd.selector.resourceId ?: ""}"
                 is TaskCommand.Scroll -> "SCROLL|${cmd.direction.name}|${cmd.distanceFraction}"
                 is TaskCommand.OpenDrawer -> "OPEN_DRAWER"
@@ -184,7 +204,20 @@ class TaskSynthesizer {
                     val desc = parts.getOrNull(2)?.ifBlank { null }
                     val id = parts.getOrNull(3)?.ifBlank { null }
                     val label = parts.getOrNull(4) ?: text ?: desc ?: id ?: "Element"
-                    result.add(TaskCommand.ClickElement(selector = TargetSelector(text = text, contentDescription = desc, resourceId = id), targetLabel = label))
+                    val normX = parts.getOrNull(5)?.toFloatOrNull()
+                    val normY = parts.getOrNull(6)?.toFloatOrNull()
+                    result.add(
+                        TaskCommand.ClickElement(
+                            selector = TargetSelector(
+                                text = text,
+                                contentDescription = desc,
+                                resourceId = id,
+                                fallbackNormalizedX = normX,
+                                fallbackNormalizedY = normY
+                            ),
+                            targetLabel = label
+                        )
+                    )
                 }
                 "ENTER_TEXT" -> {
                     val textToEnter = parts.getOrNull(1) ?: ""

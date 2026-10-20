@@ -1,5 +1,7 @@
 package com.example.core.parser
-
+ 
+import com.example.core.discovery.AppDiscoveryManager
+import com.example.core.discovery.AppResolutionResult
 import com.example.core.model.ScrollDirection
 import com.example.core.model.TargetSelector
 import com.example.core.model.TaskCommand
@@ -7,6 +9,7 @@ import com.example.core.model.VerificationRule
 import java.util.Locale
 
 class NaturalLanguageCommandParser(
+    private val appDiscoveryManager: AppDiscoveryManager? = null,
     private val defaultCalculatorPackage: String = "com.google.android.calculator",
     private val fallbackCalculatorPackages: List<String> = listOf(
         "com.android.calculator2",
@@ -25,11 +28,22 @@ class NaturalLanguageCommandParser(
 
         // Case 1: Calculator end-to-end MVP demonstration
         if (normalized.contains("calculator") || normalized.contains("calc")) {
+            val resolvedCalc = appDiscoveryManager?.resolveApp("Calculator")
+            val calcPkg = when (resolvedCalc) {
+                is AppResolutionResult.ExactMatch -> resolvedCalc.app.packageName
+                is AppResolutionResult.AmbiguousMatch -> resolvedCalc.candidates.first().packageName
+                else -> defaultCalculatorPackage
+            }
+            val calcFallbacks = when (resolvedCalc) {
+                is AppResolutionResult.AmbiguousMatch -> resolvedCalc.candidates.drop(1).map { it.packageName }
+                else -> fallbackCalculatorPackages
+            }
+
             commands.add(
                 TaskCommand.LaunchApp(
-                    packageName = defaultCalculatorPackage,
+                    packageName = calcPkg,
                     appName = "Calculator",
-                    fallbackPackages = fallbackCalculatorPackages
+                    fallbackPackages = calcFallbacks
                 )
             )
 
@@ -336,18 +350,31 @@ class NaturalLanguageCommandParser(
         // Case 4: Open/Launch specific apps
         if (normalized.startsWith("open ") || normalized.startsWith("launch ")) {
             val appTarget = trimmed.substringAfter(" ").trim()
-            val targetPkg = when (appTarget.lowercase(Locale.ROOT)) {
-                "settings" -> "com.android.settings"
-                "camera" -> "com.android.camera"
-                "contacts" -> "com.android.contacts"
-                "clock" -> "com.google.android.deskclock"
-                "files" -> "com.android.documentsui"
-                else -> appTarget
+            val resolvedApp = appDiscoveryManager?.resolveApp(appTarget)
+            val (targetPkg, fallbacks) = when (resolvedApp) {
+                is AppResolutionResult.ExactMatch -> Pair(resolvedApp.app.packageName, emptyList())
+                is AppResolutionResult.AmbiguousMatch -> Pair(
+                    resolvedApp.candidates.first().packageName,
+                    resolvedApp.candidates.drop(1).map { it.packageName }
+                )
+                else -> {
+                    val staticPkg = when (appTarget.lowercase(Locale.ROOT)) {
+                        "settings" -> "com.android.settings"
+                        "camera" -> "com.android.camera"
+                        "contacts" -> "com.android.contacts"
+                        "clock" -> "com.google.android.deskclock"
+                        "files" -> "com.android.documentsui"
+                        else -> appTarget
+                    }
+                    Pair(staticPkg, emptyList())
+                }
             }
+
             commands.add(
                 TaskCommand.LaunchApp(
                     packageName = targetPkg,
-                    appName = appTarget
+                    appName = appTarget,
+                    fallbackPackages = fallbacks
                 )
             )
             commands.add(

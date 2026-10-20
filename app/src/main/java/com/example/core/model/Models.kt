@@ -27,7 +27,9 @@ data class TargetSelector(
     val resourceId: String? = null,
     val className: String? = null,
     val clickableOnly: Boolean = false,
-    val caseSensitive: Boolean = false
+    val caseSensitive: Boolean = false,
+    val fallbackNormalizedX: Float? = null,
+    val fallbackNormalizedY: Float? = null
 ) {
     fun toReadableDescription(): String {
         val parts = mutableListOf<String>()
@@ -35,6 +37,9 @@ data class TargetSelector(
         contentDescription?.let { parts.add("desc='$it'") }
         resourceId?.let { parts.add("id='$it'") }
         className?.let { parts.add("class='$it'") }
+        if (fallbackNormalizedX != null && fallbackNormalizedY != null) {
+            parts.add("coord=[${(fallbackNormalizedX * 100).toInt()}%, ${(fallbackNormalizedY * 100).toInt()}%]")
+        }
         return if (parts.isEmpty()) "Any Element" else parts.joinToString(", ")
     }
 }
@@ -406,7 +411,9 @@ data class StepExecutionRecord(
 data class TargetMatch(
     val node: UiNode,
     val score: Int,
-    val matchReason: String
+    val matchReason: String,
+    val isAncestorFallback: Boolean = false,
+    val clickCoordinates: Pair<Int, Int>? = null
 )
 
 data class VerificationOutcome(

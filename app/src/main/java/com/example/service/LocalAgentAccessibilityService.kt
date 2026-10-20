@@ -13,6 +13,7 @@ import com.example.core.model.RectData
 import com.example.core.model.ScrollDirection
 import com.example.core.model.UiNode
 import com.example.core.model.UiSnapshot
+import com.example.core.optimizer.UiTreePruner
 import com.example.core.recorder.VisualInteractionRecorder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -136,18 +137,23 @@ class LocalAgentAccessibilityService : AccessibilityService() {
         }
 
         val packageName = root.packageName?.toString() ?: "unknown"
-        val rootUiNode = convertNode(root, depth = 0)
-        val totalCount = rootUiNode?.allDescendants?.size ?: 0
+        val windowTitle = root.className?.toString()
+        val rawRootUiNode = convertNode(root, depth = 0)
+        try { root.recycle() } catch (_: Exception) {}
+
+        // Studied from ByteDance Fastbot: Prune redundant layout wrappers immediately to minimize heap allocations
+        val prunedRoot = UiTreePruner.prune(rawRootUiNode)
+        val totalCount = prunedRoot?.allDescendants?.size ?: 0
 
         return UiSnapshot(
             id = UUID.randomUUID().toString(),
             timestampMs = System.currentTimeMillis(),
             packageName = packageName,
-            windowTitle = root.className?.toString(),
-            rootNode = rootUiNode,
+            windowTitle = windowTitle,
+            rootNode = prunedRoot,
             totalNodeCount = totalCount,
             isLive = true,
-            sourceDescription = "Live Accessibility Service (rootInActiveWindow)"
+            sourceDescription = "Live Accessibility Service (rootInActiveWindow, Pruned)"
         )
     }
 
@@ -163,6 +169,8 @@ class LocalAgentAccessibilityService : AccessibilityService() {
                 if (convertedChild != null) {
                     childList.add(convertedChild)
                 }
+                // CRITICAL FOR 4GB RAM & BINDER RESILIENCE: Recycle child node proxies
+                try { child.recycle() } catch (_: Exception) {}
             }
         }
 
@@ -185,6 +193,12 @@ class LocalAgentAccessibilityService : AccessibilityService() {
             children = childList
         )
     }
+
+    // System Navigation Global Actions (Studied from Auto-UI & AndroidWorld)
+    fun dispatchBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
+    fun dispatchHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
+    fun dispatchRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
+    fun dispatchNotifications(): Boolean = performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
 
     fun dispatchClick(targetBounds: RectData): Boolean {
         val root = rootInActiveWindow

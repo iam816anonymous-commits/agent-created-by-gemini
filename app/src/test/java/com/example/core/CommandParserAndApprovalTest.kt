@@ -1,0 +1,100 @@
+package com.example.core
+
+import com.example.core.approval.ExecutionPlan
+import com.example.core.approval.ProposedStep
+import com.example.core.approval.RiskLevel
+import com.example.core.approval.TaskApprovalGate
+import com.example.core.model.TaskCommand
+import com.example.core.parser.NaturalLanguageCommandParser
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CommandParserAndApprovalTest {
+
+    @Test
+    fun testCommandParser_parsesCalculatorDirectiveWithoutAssumingSpecificVendor() {
+        val parser = NaturalLanguageCommandParser()
+        val commands = parser.parse("Open calculator and calculate 7 * 8")
+
+        assertTrue("Should contain launch app", commands.any { it is TaskCommand.LaunchApp })
+        val launch = commands.filterIsInstance<TaskCommand.LaunchApp>().first()
+        assertEquals("Calculator", launch.appName)
+        // Checks that fallbacks are populated for dynamic device resolution
+        assertTrue("Fallback packages must be provided", launch.fallbackPackages.isNotEmpty())
+    }
+
+    @Test
+    fun testCommandParser_parsesGenericOpenAppCommand() {
+        val parser = NaturalLanguageCommandParser()
+        val commands = parser.parse("Open Camera")
+
+        val launch = commands.filterIsInstance<TaskCommand.LaunchApp>().firstOrNull()
+        assertNotNull("Should parse launch command", launch)
+        assertEquals("Camera", launch?.appName)
+    }
+
+    @Test
+    fun testTaskApprovalGate_autoClassifiesRiskLevels() {
+        val gate = TaskApprovalGate()
+
+        // 1. Critical risk action: Delete
+        val criticalPlan = gate.proposePlan(
+            rawTask = "Delete all notes in Keep",
+            resolvedPackage = "com.google.android.keep",
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Delete note item",
+                    actionType = "CLICK",
+                    target = "Delete permanently"
+                )
+            )
+        )
+
+        assertTrue("Critical action must require elevated confirmation", criticalPlan.requiresElevatedConfirmation)
+        assertEquals(RiskLevel.CRITICAL, criticalPlan.steps[0].riskLevel)
+
+        // 2. Low risk action: Read or view
+        val lowRiskPlan = gate.proposePlan(
+            rawTask = "View weather in morning briefing",
+            resolvedPackage = null,
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Read forecast summary",
+                    actionType = "OBSERVE",
+                    target = "Weather widget"
+                )
+            )
+        )
+
+        assertFalse("Low risk action does not require elevated confirmation", lowRiskPlan.requiresElevatedConfirmation)
+        assertEquals(RiskLevel.LOW, lowRiskPlan.steps[0].riskLevel)
+    }
+
+    @Test
+    fun testTaskApprovalGate_approvalFlow() {
+        val gate = TaskApprovalGate()
+        val plan = gate.proposePlan(
+            rawTask = "Open Settings",
+            resolvedPackage = "com.android.settings",
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Launch Settings",
+                    actionType = "LAUNCH",
+                    target = "Settings"
+                )
+            )
+        )
+
+        assertFalse("Plan cannot execute before approval", gate.canExecute(plan.planId))
+
+        val approved = gate.approvePlan(plan.planId)
+        assertTrue(approved)
+        assertTrue("Plan can execute after explicit approval", gate.canExecute(plan.planId))
+    }
+}
