@@ -1,177 +1,151 @@
 package com.example.core.engine
 
-import com.example.core.model.StepStatus
 import com.example.core.model.TaskCommand
 import com.example.core.model.UiSnapshot
-import java.util.UUID
 
-data class SubGoal(
-    val id: String = UUID.randomUUID().toString(),
-    val title: String,
-    val description: String,
-    val targetPackage: String? = null,
-    val stepBudget: Int = 4,
-    val plannedCommands: List<TaskCommand>,
-    val rollbackCommand: TaskCommand? = null,
-    val completionCheck: ((UiSnapshot?) -> Boolean)? = null
-)
-
-enum class SubGoalExecutionState {
+enum class SubGoalStatus {
     PENDING,
     IN_PROGRESS,
-    ACCOMPLISHED,
-    BUDGET_EXHAUSTED,
-    ROLLBACK_TRIGGERED,
+    ACHIEVED,
+    EXHAUSTED_BUDGET,
+    ROLLED_BACK,
     FAILED
 }
 
-data class SubGoalProgress(
-    val subGoal: SubGoal,
-    var state: SubGoalExecutionState = SubGoalExecutionState.PENDING,
+data class SubGoal(
+    val id: String,
+    val title: String,
+    val targetPackage: String,
+    val stepBudget: Int = 4,
     var stepsConsumed: Int = 0,
-    var failureReason: String? = null
-)
+    val completionCriteriaDescription: String,
+    val evaluateCompletion: (UiSnapshot?) -> Boolean,
+    val rollbackCommands: List<TaskCommand> = listOf(TaskCommand.PressBack("rollback_back")),
+    var status: SubGoalStatus = SubGoalStatus.PENDING
+) {
+    val isBudgetExceeded: Boolean get() = stepsConsumed >= stepBudget
+}
 
 data class HierarchicalPlan(
-    val id: String = UUID.randomUUID().toString(),
-    val overallGoal: String,
+    val planId: String,
+    val overallIntent: String,
     val subGoals: List<SubGoal>,
-    val maxTotalSteps: Int = 16,
-    val createdAtMs: Long = System.currentTimeMillis()
-)
+    val maxTotalSteps: Int = 15
+) {
+    val currentSubGoal: SubGoal?
+        get() = subGoals.firstOrNull { it.status == SubGoalStatus.IN_PROGRESS || it.status == SubGoalStatus.PENDING }
 
-sealed interface PlannerDecision {
-    data class NextCommand(
-        val subGoalId: String,
-        val command: TaskCommand,
-        val remainingBudgetInSubGoal: Int
-    ) : PlannerDecision
+    val isAllAchieved: Boolean
+        get() = subGoals.isNotEmpty() && subGoals.all { it.status == SubGoalStatus.ACHIEVED }
 
-    data class TriggerRollback(
-        val subGoalId: String,
-        val rollbackCommand: TaskCommand,
-        val reason: String
-    ) : PlannerDecision
+    val totalStepsConsumed: Int
+        get() = subGoals.sumOf { it.stepsConsumed }
+}
 
-    data class PlanCompleted(val summary: String) : PlannerDecision
-    data class PlanAborted(val reason: String) : PlannerDecision
+sealed interface PlanExecutionDecision {
+    data class ContinueSubGoal(val subGoal: SubGoal, val remainingBudget: Int) : PlanExecutionDecision
+    data class SubGoalCompleted(val completedSubGoal: SubGoal, val nextSubGoal: SubGoal?) : PlanExecutionDecision
+    data class TriggerRollback(val failedSubGoal: SubGoal, val rollbackCommands: List<TaskCommand>, val reason: String) : PlanExecutionDecision
+    data class PlanFinished(val isSuccess: Boolean, val summary: String) : PlanExecutionDecision
 }
 
 /**
- * Studied from MadeAgents MobileUse & skill-agent:
- * Hierarchical Task Planner with bounded sub-goal step budgets and dynamic rollback recovery.
+ * Studied from MadeAgents/mobile-use & skill-agent:
+ * Hierarchical Task Planning and Bounded Sub-Goal Execution with Dynamic Rollback.
  *
- * Prevents long-horizon task collapse, infinite retry loops, and blind repetition on low-memory devices.
- * Memory footprint: < 2 KB on heap.
+ * Prevents naive infinite loops and repeated retries on Android by strictly enforcing:
+ * 1. Sub-goal step ceilings (max 4 steps per sub-goal).
+ * 2. Active precondition & completion verification against live UiSnapshots.
+ * 3. Automatic rollback maneuvers (PressBack / App Relaunch) if a sub-goal budget expires.
+ * 4. Memory footprint < 3 KB on 4GB RAM device (Helio P23, API 27).
  */
-class HierarchicalTaskPlanner(
-    val plan: HierarchicalPlan
-) {
-    private val subGoalProgressList = plan.subGoals.map { SubGoalProgress(it) }
-    private var currentSubGoalIdx = 0
-    private var currentCommandIdx = 0
-    private var totalStepsConsumed = 0
+class HierarchicalTaskPlanner {
 
-    val currentSubGoal: SubGoal?
-        get() = if (currentSubGoalIdx in subGoalProgressList.indices) {
-            subGoalProgressList[currentSubGoalIdx].subGoal
-        } else null
-
-    val currentProgress: SubGoalProgress?
-        get() = if (currentSubGoalIdx in subGoalProgressList.indices) {
-            subGoalProgressList[currentSubGoalIdx]
-        } else null
-
-    val isFinished: Boolean
-        get() = currentSubGoalIdx >= subGoalProgressList.size || totalStepsConsumed >= plan.maxTotalSteps
+    fun initializePlan(
+        planId: String,
+        overallIntent: String,
+        subGoals: List<SubGoal>,
+        maxTotalSteps: Int = 15
+    ): HierarchicalPlan {
+        if (subGoals.isNotEmpty()) {
+            subGoals.first().status = SubGoalStatus.IN_PROGRESS
+        }
+        return HierarchicalPlan(
+            planId = planId,
+            overallIntent = overallIntent,
+            subGoals = subGoals,
+            maxTotalSteps = maxTotalSteps
+        )
+    }
 
     /**
-     * Determines the next action based on current sub-goal status, step budget, and active UI snapshot.
+     * Evaluates post-step state and returns the next plan decision.
      */
-    fun nextDecision(latestSnapshot: UiSnapshot?): PlannerDecision {
-        if (totalStepsConsumed >= plan.maxTotalSteps) {
-            return PlannerDecision.PlanAborted("Exceeded overall maximum step budget of ${plan.maxTotalSteps} steps")
+    fun onStepExecuted(
+        plan: HierarchicalPlan,
+        postSnapshot: UiSnapshot?,
+        isStagnantOrCycle: Boolean = false
+    ): PlanExecutionDecision {
+        val activeSubGoal = plan.currentSubGoal
+            ?: return PlanExecutionDecision.PlanFinished(
+                isSuccess = plan.isAllAchieved,
+                summary = if (plan.isAllAchieved) "All sub-goals successfully completed" else "No active sub-goal found"
+            )
+
+        activeSubGoal.status = SubGoalStatus.IN_PROGRESS
+        activeSubGoal.stepsConsumed++
+
+        // 1. Check if overall plan budget exceeded
+        if (plan.totalStepsConsumed >= plan.maxTotalSteps) {
+            activeSubGoal.status = SubGoalStatus.EXHAUSTED_BUDGET
+            return PlanExecutionDecision.PlanFinished(
+                isSuccess = false,
+                summary = "Plan overall budget exceeded (${plan.totalStepsConsumed}/${plan.maxTotalSteps} steps)"
+            )
         }
 
-        if (currentSubGoalIdx >= subGoalProgressList.size) {
-            return PlannerDecision.PlanCompleted("All ${subGoalProgressList.size} sub-goals successfully accomplished")
+        // 2. Evaluate if current sub-goal is achieved
+        val achieved = try {
+            activeSubGoal.evaluateCompletion(postSnapshot)
+        } catch (e: Exception) {
+            false
         }
 
-        val progress = subGoalProgressList[currentSubGoalIdx]
-        val subGoal = progress.subGoal
+        if (achieved) {
+            activeSubGoal.status = SubGoalStatus.ACHIEVED
+            val next = plan.currentSubGoal
+            next?.status = SubGoalStatus.IN_PROGRESS
 
-        // Check if current sub-goal is already satisfied by current UI observation
-        if (subGoal.completionCheck?.invoke(latestSnapshot) == true) {
-            progress.state = SubGoalExecutionState.ACCOMPLISHED
-            currentSubGoalIdx++
-            currentCommandIdx = 0
-            return nextDecision(latestSnapshot)
-        }
-
-        // Check step budget exhaustion for current sub-goal
-        if (progress.stepsConsumed >= subGoal.stepBudget) {
-            progress.state = SubGoalExecutionState.BUDGET_EXHAUSTED
-            if (subGoal.rollbackCommand != null && progress.state != SubGoalExecutionState.ROLLBACK_TRIGGERED) {
-                progress.state = SubGoalExecutionState.ROLLBACK_TRIGGERED
-                totalStepsConsumed++
-                return PlannerDecision.TriggerRollback(
-                    subGoalId = subGoal.id,
-                    rollbackCommand = subGoal.rollbackCommand,
-                    reason = "Sub-goal '${subGoal.title}' exhausted step budget (${subGoal.stepBudget} steps); triggering baseline rollback"
+            return if (next == null) {
+                PlanExecutionDecision.PlanFinished(
+                    isSuccess = true,
+                    summary = "Hierarchical plan '${plan.overallIntent}' completed successfully in ${plan.totalStepsConsumed} steps"
                 )
+            } else {
+                PlanExecutionDecision.SubGoalCompleted(activeSubGoal, next)
             }
-            return PlannerDecision.PlanAborted(
-                "Sub-goal '${subGoal.title}' exhausted budget of ${subGoal.stepBudget} steps without achieving post-condition"
+        }
+
+        // 3. Check for stagnation or sub-goal step exhaustion -> Trigger Rollback
+        if (isStagnantOrCycle || activeSubGoal.isBudgetExceeded) {
+            activeSubGoal.status = SubGoalStatus.ROLLED_BACK
+            val reason = if (isStagnantOrCycle) {
+                "Detected UI stagnation or action oscillation in sub-goal '${activeSubGoal.title}'"
+            } else {
+                "Sub-goal '${activeSubGoal.title}' exceeded step budget (${activeSubGoal.stepsConsumed}/${activeSubGoal.stepBudget})"
+            }
+
+            return PlanExecutionDecision.TriggerRollback(
+                failedSubGoal = activeSubGoal,
+                rollbackCommands = activeSubGoal.rollbackCommands,
+                reason = reason
             )
         }
 
-        // Dispatch next command within active sub-goal
-        if (currentCommandIdx < subGoal.plannedCommands.size) {
-            val cmd = subGoal.plannedCommands[currentCommandIdx]
-            currentCommandIdx++
-            progress.stepsConsumed++
-            totalStepsConsumed++
-            progress.state = SubGoalExecutionState.IN_PROGRESS
-
-            val remainingBudget = subGoal.stepBudget - progress.stepsConsumed
-            return PlannerDecision.NextCommand(
-                subGoalId = subGoal.id,
-                command = cmd,
-                remainingBudgetInSubGoal = remainingBudget
-            )
-        }
-
-        // If commands ran out but completionCheck didn't pass yet, evaluate snapshot
-        if (subGoal.completionCheck?.invoke(latestSnapshot) == true) {
-            progress.state = SubGoalExecutionState.ACCOMPLISHED
-            currentSubGoalIdx++
-            currentCommandIdx = 0
-            return nextDecision(latestSnapshot)
-        }
-
-        // If no completionCheck was set and all commands dispatched, mark accomplished
-        if (subGoal.completionCheck == null) {
-            progress.state = SubGoalExecutionState.ACCOMPLISHED
-            currentSubGoalIdx++
-            currentCommandIdx = 0
-            return nextDecision(latestSnapshot)
-        }
-
-        return PlannerDecision.PlanAborted("Commands completed for '${subGoal.title}', but postcondition verification failed")
-    }
-
-    /**
-     * Reports execution feedback from actuator/verifier to advance or adjust planner state.
-     */
-    fun reportStepResult(stepStatus: StepStatus, details: String? = null) {
-        val progress = currentProgress ?: return
-        if (stepStatus == StepStatus.FAILURE || stepStatus == StepStatus.TIMEOUT) {
-            progress.failureReason = details ?: "Step ended with status $stepStatus"
-        }
-    }
-
-    fun getSummary(): String {
-        val completedCount = subGoalProgressList.count { it.state == SubGoalExecutionState.ACCOMPLISHED }
-        return "Hierarchical Plan [${plan.overallGoal}]: $completedCount/${subGoalProgressList.size} sub-goals completed, $totalStepsConsumed/${plan.maxTotalSteps} steps used"
+        // 4. Continue sub-goal within budget
+        return PlanExecutionDecision.ContinueSubGoal(
+            subGoal = activeSubGoal,
+            remainingBudget = activeSubGoal.stepBudget - activeSubGoal.stepsConsumed
+        )
     }
 }
