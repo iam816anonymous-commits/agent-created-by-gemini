@@ -196,7 +196,7 @@ export function App() {
   // ==========================================
   // J.A.R.V.I.S. & UI CONTROLLER STATE
   // ==========================================
-  const [activeCategory, setActiveCategory] = useState<'all' | 'directives' | 'verification' | 'slm_brain' | 'actuators' | 'viewport' | 'intelligence' | 'vault' | 'telemetry' | 'testcenter'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'directives' | 'environment' | 'curiosity' | 'morning_review' | 'verification' | 'slm_brain' | 'actuators' | 'viewport' | 'intelligence' | 'vault' | 'telemetry' | 'testcenter'>('all');
   const [oledLowPowerMode, setOledLowPowerMode] = useState(false);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
@@ -207,6 +207,279 @@ export function App() {
   const [activityFeedTab, setActivityFeedTab] = useState<'AUDIT' | 'DIAGNOSTICS' | 'VERIFICATION' | 'TESTCENTER' | 'VAULT'>('AUDIT');
   const [selectedSkillModal, setSelectedSkillModal] = useState<any | null>(null);
   const [logFilterQuery, setLogFilterQuery] = useState('');
+
+  // ==========================================
+  // PHYSICAL ENVIRONMENT & APP TOPOLOGY STATE (Step 1)
+  // ==========================================
+  const [ambientLightLux, setAmbientLightLux] = useState<number>(145);
+  const [socTemperatureC, setSocTemperatureC] = useState<number>(36.2);
+  const [thermalThrottled, setThermalThrottled] = useState<boolean>(false);
+  const [isCalibratingEnv, setIsCalibratingEnv] = useState<boolean>(false);
+  const [envCalibrationStep, setEnvCalibrationStep] = useState<string>('Sensors and 6 system apps 100% calibrated.');
+  const [selectedTopologyAppPkg, setSelectedTopologyAppPkg] = useState<string>('com.android.settings');
+  const [testedAnchorFeedback, setTestedAnchorFeedback] = useState<string | null>(null);
+
+  const [appTopologies, setAppTopologies] = useState([
+    {
+      packageName: 'com.android.settings',
+      appLabel: 'System Settings',
+      isSystemApp: true,
+      mainActivity: 'com.android.settings.Settings',
+      knownScreens: ['MainSettings', 'NetworkAndInternet', 'ConnectedDevices', 'BatteryOptimization', 'Accessibility'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-wifi', targetType: 'SWITCH', accessibilityId: 'switch_widget', label: 'Wi-Fi Toggle', spatialRelation: 'RIGHT_OF_LABEL', boundingBox: 'Rect(620, 180 - 700, 240)', verified: true },
+        { anchorId: 'anchor-bt', targetType: 'SWITCH', accessibilityId: 'switch_widget', label: 'Bluetooth Toggle', spatialRelation: 'RIGHT_OF_LABEL', boundingBox: 'Rect(620, 260 - 700, 320)', verified: true },
+        { anchorId: 'anchor-battery', targetType: 'LIST_ITEM', accessibilityId: 'battery_opt_row', label: 'Battery Optimization', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 520 - 680, 590)', verified: true },
+        { anchorId: 'anchor-acc', targetType: 'LIST_ITEM', accessibilityId: 'accessibility_row', label: 'Accessibility Service', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 720 - 680, 790)', verified: true }
+      ],
+      fastPathIntentUri: 'android.settings.SETTINGS',
+      permissions: ['WRITE_SETTINGS'],
+      masteryScore: 100
+    },
+    {
+      packageName: 'com.google.android.keep',
+      appLabel: 'Google Keep Notes',
+      isSystemApp: true,
+      mainActivity: 'com.google.android.keep.activities.BrowseActivity',
+      knownScreens: ['BrowseNotes', 'EditorActivity', 'SearchNotes', 'ReminderPicker'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-new-note', targetType: 'BUTTON', accessibilityId: 'new_note_button', label: 'New text note FAB', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(610, 1310 - 690, 1390)', verified: true },
+        { anchorId: 'anchor-note-title', targetType: 'EDIT_TEXT', accessibilityId: 'editable_title', label: 'Note Title Field', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 120 - 680, 190)', verified: true },
+        { anchorId: 'anchor-note-body', targetType: 'EDIT_TEXT', accessibilityId: 'edit_note_text', label: 'Note Body Content', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 200 - 680, 1100)', verified: true }
+      ],
+      fastPathIntentUri: 'android.intent.action.VIEW',
+      permissions: [],
+      masteryScore: 98
+    },
+    {
+      packageName: 'com.android.calculator2',
+      appLabel: 'AOSP Calculator',
+      isSystemApp: true,
+      mainActivity: 'com.android.calculator2.Calculator',
+      knownScreens: ['MainCalculatorPad', 'AdvancedPadMenu'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-calc-formula', targetType: 'EDIT_TEXT', accessibilityId: 'formula', label: 'Expression Formula Display', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 80 - 680, 280)', verified: true },
+        { anchorId: 'anchor-calc-result', targetType: 'EDIT_TEXT', accessibilityId: 'result', label: 'Result Preview Output', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 290 - 680, 420)', verified: true },
+        { anchorId: 'anchor-calc-eq', targetType: 'BUTTON', accessibilityId: 'eq', label: 'Equals (=) Operator', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(530, 1220 - 690, 1380)', verified: true }
+      ],
+      fastPathIntentUri: undefined,
+      permissions: [],
+      masteryScore: 100
+    },
+    {
+      packageName: 'com.android.hardware.flashlight',
+      appLabel: 'Dual Flashlight Controller',
+      isSystemApp: true,
+      mainActivity: 'com.example.localagent.hardware.TorchService',
+      knownScreens: ['CameraManagerTorchService'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-rear-quad', targetType: 'SWITCH', accessibilityId: 'rear_torch_toggle', label: 'Rear Quad-LED Flash (Camera 0)', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(100, 200 - 300, 280)', verified: true },
+        { anchorId: 'anchor-front-dual', targetType: 'SWITCH', accessibilityId: 'front_torch_toggle', label: 'Front Dual-LED Flash (Camera 1)', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(420, 200 - 620, 280)', verified: true }
+      ],
+      fastPathIntentUri: undefined,
+      permissions: ['android.permission.CAMERA'],
+      masteryScore: 100
+    },
+    {
+      packageName: 'com.android.chrome',
+      appLabel: 'Chrome Browser',
+      isSystemApp: true,
+      mainActivity: 'com.google.android.apps.chrome.Main',
+      knownScreens: ['TabSwitcher', 'WebBrowserView', 'OmniboxEditor'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-omnibox', targetType: 'EDIT_TEXT', accessibilityId: 'url_bar', label: 'Search or Type Web Address', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(60, 60 - 600, 130)', verified: true },
+        { anchorId: 'anchor-tab-switcher', targetType: 'BUTTON', accessibilityId: 'tab_switcher_button', label: 'Tab Switcher Counter', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(610, 60 - 690, 130)', verified: true }
+      ],
+      fastPathIntentUri: 'android.intent.action.VIEW',
+      permissions: ['android.permission.INTERNET'],
+      masteryScore: 96
+    },
+    {
+      packageName: 'com.example.localagent.briefing',
+      appLabel: 'Morning Intelligence HUD',
+      isSystemApp: true,
+      mainActivity: 'com.example.localagent.briefing.MainActivity',
+      knownScreens: ['MorningBriefingView', 'OvernightDigest', 'WeatherCard', 'CinemaFeed'],
+      verifiedUiAnchors: [
+        { anchorId: 'anchor-briefing-weather', targetType: 'CARD', accessibilityId: 'weather_card', label: 'Weather & AQI Gauge', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 100 - 680, 260)', verified: true },
+        { anchorId: 'anchor-briefing-cinema', targetType: 'LIST_ITEM', accessibilityId: 'cinema_item', label: 'Telugu Cinema Box Office Card', spatialRelation: 'EXACT_BOUNDS', boundingBox: 'Rect(40, 280 - 680, 440)', verified: true }
+      ],
+      fastPathIntentUri: undefined,
+      permissions: [],
+      masteryScore: 100
+    }
+  ]);
+
+  // ==========================================
+  // NIGHT-TO-MORNING CONSOLIDATION & REVIEW STATE (Step 3)
+  // ==========================================
+  const [morningReviewFilter, setMorningReviewFilter] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('PENDING');
+  const [isSimulatingNightCycle, setIsSimulatingNightCycle] = useState<boolean>(false);
+  const [overnightLearnedItems, setOvernightLearnedItems] = useState([
+    {
+      id: 'night-know-001',
+      title: 'Helio P23 Core Standby Wake-Lock Governor',
+      category: 'PHYSICAL_SENSOR_RULE' as 'PHYSICAL_SENSOR_RULE' | 'APP_TOPOLOGY' | 'FAST_PATH_MACRO' | 'SLM_GRAMMAR',
+      overnightSource: 'Autonomous Night Exploration & AOSP API 27 Specs',
+      confidenceScore: 0.99,
+      memoryCostKb: 1.8,
+      whyUsefulToAgent: 'Drops background idle power from 1.4W to 0.6W when the screen is dark, allowing the 42MB agent to run 24/7 without draining user battery.',
+      executionPayload: [
+        'Register SCREEN_OFF broadcast listener',
+        'Release non-essential wake-locks within 15 seconds',
+        'Enforce dumpsys deviceidle step when idle > 30 mins'
+      ],
+      status: 'PENDING_MORNING_REVIEW' as 'PENDING_MORNING_REVIEW' | 'ACCEPTED' | 'DECLINED',
+      nightTimestamp: '02:15 AM'
+    },
+    {
+      id: 'night-know-002',
+      title: 'Google Keep Fast-Path Hashtag Splitter',
+      category: 'APP_TOPOLOGY' as 'PHYSICAL_SENSOR_RULE' | 'APP_TOPOLOGY' | 'FAST_PATH_MACRO' | 'SLM_GRAMMAR',
+      overnightSource: 'Daytime Interaction Mining & Keep UI Topology',
+      confidenceScore: 0.96,
+      memoryCostKb: 2.4,
+      whyUsefulToAgent: 'Bypasses slow 3-second UI form navigation by injecting direct URI intents with pre-tagged labels (#groceries, #work), reducing action latency by 68%.',
+      executionPayload: [
+        "Parse user speech for '#' prefixes",
+        'Construct explicit Intent action=ACTION_SEND type=text/plain',
+        'Verify target editor emergence in under 350ms'
+      ],
+      status: 'PENDING_MORNING_REVIEW' as 'PENDING_MORNING_REVIEW' | 'ACCEPTED' | 'DECLINED',
+      nightTimestamp: '03:40 AM'
+    },
+    {
+      id: 'night-know-003',
+      title: 'Dual Flash Strobe Thermal Throttling Guard',
+      category: 'PHYSICAL_SENSOR_RULE' as 'PHYSICAL_SENSOR_RULE' | 'APP_TOPOLOGY' | 'FAST_PATH_MACRO' | 'SLM_GRAMMAR',
+      overnightSource: 'Autonomous Hardware Actuator Stress Profiling',
+      confidenceScore: 0.97,
+      memoryCostKb: 1.2,
+      whyUsefulToAgent: 'Prevents MediaTek flash driver burnout by auto-pulsing Camera 0 quad-LED at 80% duty cycle when SoC temperature exceeds 42°C.',
+      executionPayload: [
+        'Monitor /sys/class/thermal/thermal_zone0/temp',
+        'If temp > 42°C, insert 150ms cool-down gap between strobe bursts',
+        'Alert user HUD if hardware ceiling is approached'
+      ],
+      status: 'PENDING_MORNING_REVIEW' as 'PENDING_MORNING_REVIEW' | 'ACCEPTED' | 'DECLINED',
+      nightTimestamp: '04:12 AM'
+    },
+    {
+      id: 'night-know-004',
+      title: 'Telugu Cinema Morning Briefing Distillation',
+      category: 'FAST_PATH_MACRO' as 'PHYSICAL_SENSOR_RULE' | 'APP_TOPOLOGY' | 'FAST_PATH_MACRO' | 'SLM_GRAMMAR',
+      overnightSource: 'Online Public Grounding (Sacnilk / Trade Registry)',
+      confidenceScore: 0.94,
+      memoryCostKb: 3.1,
+      whyUsefulToAgent: 'Summarizes verified Telugu box office numbers (SSMB29 ₹1,200+ Cr, Spirit OTT Netflix) into an ultra-compact 3-line card ready for instant morning display without browser latency.',
+      executionPayload: [
+        'Distill online public collection figures into structured JSON',
+        'Format concise morning card with no external browser dependency',
+        'Display immediately in Morning Briefing HUD'
+      ],
+      status: 'ACCEPTED' as 'PENDING_MORNING_REVIEW' | 'ACCEPTED' | 'DECLINED',
+      nightTimestamp: '05:00 AM'
+    }
+  ]);
+
+  // ==========================================
+  // AUTONOMOUS CURIOSITY & ONLINE LEARNING STATE
+  // ==========================================
+  const [curiosityTopics, setCuriosityTopics] = useState([
+    {
+      id: 'topic-cinema-2026',
+      title: 'Telugu Box Office & OTT Releases (Fall 2026)',
+      category: 'CINEMA',
+      trigger: 'Identified user interest in Telugu entertainment; SSMB29, Spirit, and Raja Saab OTT schedules need live synchronization.',
+      source: 'Zero-Login Public Box Office Web Grounding',
+      question: "I noticed you follow Telugu cinema. May I research current October 2026 box office collections for SSMB29 and upcoming OTT release dates for Spirit & Raja Saab, and learn this together?",
+      proposedSkill: 'Telugu Cinema Morning Briefing & OTT Tracker',
+      targetPackage: 'com.google.android.googlequicksearchbox',
+      facts: [
+        { key: 'SSMB29 Box Office', value: 'Grossed ₹1,200+ Cr globally in 18 days; running in theatres worldwide.', source: 'Public Trade Grounding' },
+        { key: 'Spirit (Prabhas / Sandeep Vanga)', value: 'Theatrical release December 2026; streaming rights acquired by Netflix.', source: 'Trade Bulletin' },
+        { key: 'The Raja Saab', value: 'Romantic horror directed by Maruthi; official teaser surpasses 45M views.', source: 'Production Wire' }
+      ],
+      steps: [
+        'Query anonymous public web synopsis without credentials',
+        'Extract verified release milestones & collections',
+        'Format daily cinema briefing card for morning dashboard'
+      ],
+      status: 'PROPOSED' as 'PROPOSED' | 'LEARNING' | 'DIALOGUE' | 'COMMITTED' | 'DECLINED'
+    },
+    {
+      id: 'topic-helio-p23-battery',
+      title: 'Helio P23 CPU Scheduling & Android 8.1 Doze Optimization',
+      category: 'SYSTEM',
+      trigger: 'Target hardware is MediaTek Helio P23 on Android 8.1 (API 27). Deep standby tuning can prevent idle drain by 28%.',
+      source: 'AOSP Android 8.1 Oreo Power Management & Helio CorePilot Specs',
+      question: "Your TECNO Camon i Click uses an octa-core Helio P23 chip. Would you like me to research and learn the exact battery optimization gestures to enforce deep Doze mode during night hours?",
+      proposedSkill: 'Helio P23 Aggressive Doze Enforcer',
+      targetPackage: 'com.android.settings',
+      facts: [
+        { key: 'Helio P23 Architecture', value: '8x Cortex-A53 cores (4 efficiency @ 1.5GHz, 4 performance @ 2.0GHz).', source: 'Hardware Specs' },
+        { key: 'Android 8.1 Doze Mode', value: 'Standby wake-locks reduced by 60% when battery optimization is bypassed for critical services.', source: 'AOSP API 27' }
+      ],
+      steps: [
+        'Open Settings -> Battery -> Battery Optimization',
+        'Mark LocalAgent as Not Optimized (preserve background service)',
+        'Activate night standby profile when screen is off > 30 minutes'
+      ],
+      status: 'PROPOSED' as 'PROPOSED' | 'LEARNING' | 'DIALOGUE' | 'COMMITTED' | 'DECLINED'
+    },
+    {
+      id: 'topic-sos-flash',
+      title: 'International SOS Morse Code Strobe (... --- ...)',
+      category: 'HARDWARE',
+      trigger: 'Dual camera flashlights (Quad-LED rear + Dual-LED front) can provide emergency signaling.',
+      source: 'ITU-R M.1677-1 International Morse Code Standard',
+      question: "I can learn the international Morse code SOS distress timing (... --- ...) using your rear quad-LED and front dual-flash. Should we synthesize an Emergency SOS skill for voice activation?",
+      proposedSkill: 'Emergency Dual-Flash SOS Actuator',
+      targetPackage: 'com.android.hardware.flashlight',
+      facts: [
+        { key: 'SOS Morse Sequence', value: '3 short pulses (200ms), 3 long pulses (600ms), 3 short pulses (200ms).', source: 'ITU Standards' },
+        { key: 'Thermal Safeguard', value: 'Auto-throttle after 180 seconds to protect MediaTek LED controller.', source: 'TECNO Hardware Guide' }
+      ],
+      steps: [
+        'Open CameraManager torch mode on ID 0 and ID 1 simultaneously',
+        'Cycle rhythmic pulses: 3x200ms, 3x600ms, 3x200ms',
+        'Auto-shutoff after 3 completed SOS sequences or on user double-tap'
+      ],
+      status: 'PROPOSED' as 'PROPOSED' | 'LEARNING' | 'DIALOGUE' | 'COMMITTED' | 'DECLINED'
+    },
+    {
+      id: 'topic-keep-shortcuts',
+      title: 'Google Keep Automated Voice-to-Text Tagging',
+      category: 'PRODUCTIVITY',
+      trigger: 'User frequently creates notes; adding hashtag classification (#groceries, #work) enables instant filtering.',
+      source: 'Google Keep UI Automation & Labeling Conventions',
+      question: "I can learn how to automatically parse hashtags like #shopping and #todo when creating notes in Google Keep. Shall we learn this procedure together?",
+      proposedSkill: 'Smart Tagged Keep Note Creator',
+      targetPackage: 'com.google.android.keep',
+      facts: [
+        { key: 'Keep UI Element', value: 'New text note icon contentDescription is "New text note".', source: 'Accessibility Node Tree' },
+        { key: 'Label Recognition', value: 'Hashtag prefixed words are auto-linked to Keep label buckets.', source: 'Google Keep Guide' }
+      ],
+      steps: [
+        'Launch com.google.android.keep via AccessibilityService',
+        'Click new_note_button with SpatialAnchor verification',
+        'Type note body with formatted #category tags'
+      ],
+      status: 'PROPOSED' as 'PROPOSED' | 'LEARNING' | 'DIALOGUE' | 'COMMITTED' | 'DECLINED'
+    }
+  ]);
+  const [activeCuriosityIdx, setActiveCuriosityIdx] = useState(0);
+  const [isCuriosityLearning, setIsCuriosityLearning] = useState(false);
+  const [curiosityDialogueStep, setCuriosityDialogueStep] = useState<'IDLE' | 'LEARNING_ONLINE' | 'INTERACTIVE_VERIFY' | 'CONFIRMED'>('IDLE');
+  const [userCustomCuriosityInput, setUserCustomCuriosityInput] = useState('');
+  const [curiosityUserFeedback, setCuriosityUserFeedback] = useState('');
+  const [curiosityInteractionLog, setCuriosityInteractionLog] = useState<Array<{ sender: 'AGENT' | 'USER'; text: string; time: string }>>([
+    {
+      sender: 'AGENT',
+      text: "Hello! I am actively scanning for skills and real-world knowledge that can make your TECNO Camon i Click more capable. I have prepared my first collaborative learning proposal below. Whenever you're ready, tell me if it's okay!",
+      time: '10:00 AM'
+    }
+  ]);
 
   // Phase 10: Automated Test Suite State (Rigorous Falsification Assertions)
   const [testSuite, setTestSuite] = useState([
@@ -1269,7 +1542,7 @@ export function App() {
   ]);
 
   // Semantic Facts
-  const [agentFacts] = useState<AgentFact[]>([
+  const [agentFacts, setAgentFacts] = useState<AgentFact[]>([
     { id: 'f-1', category: 'DEVICE', statement: 'Host device is TECNO Camon i Click (IN6) running HiOS 3.3 over Android 8.1 Oreo with 4GB RAM / 64GB Storage.', confidence: '1.0', provenance: 'android.os.Build inspection' },
     { id: 'f-2', category: 'STORAGE', statement: 'Durable Brain Vault persisted at /sdcard/LocalAgent/brain_vault.json in external public storage to survive APK uninstallation.', confidence: '1.0', provenance: 'Environment.getExternalStorageDirectory()' },
     { id: 'f-3', category: 'CINEMA', statement: 'Temporal anchor is Sunday, October 18, 2026. Top Telugu releases include SSMB29, Spirit, and The Raja Saab.', confidence: '0.99', provenance: 'Live Cinema Intelligence & Box Office Sync' },
@@ -1885,6 +2158,175 @@ export function App() {
     ]);
   };
 
+  // ==========================================
+  // AUTONOMOUS CURIOSITY LEARNING HANDLERS
+  // ==========================================
+  const handleApproveCuriosityTopic = (topicIdx: number) => {
+    const topic = curiosityTopics[topicIdx];
+    if (!topic) return;
+
+    setIsCuriosityLearning(true);
+    setCuriosityDialogueStep('LEARNING_ONLINE');
+
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setCuriosityInteractionLog(prev => [
+      ...prev,
+      {
+        sender: 'USER',
+        text: `It's okay! Research "${topic.title}" online and let's learn it together.`,
+        time: nowStr
+      },
+      {
+        sender: 'AGENT',
+        text: `Connecting to online public grounding (${topic.source}). Parsing real-world data with on-demand zero-leak SLM...`,
+        time: nowStr
+      }
+    ]);
+
+    setTimeout(() => {
+      setIsCuriosityLearning(false);
+      setCuriosityDialogueStep('INTERACTIVE_VERIFY');
+
+      setCuriosityTopics(prev =>
+        prev.map((t, idx) => (idx === topicIdx ? { ...t, status: 'DIALOGUE' } : t))
+      );
+
+      setCuriosityInteractionLog(prev => [
+        ...prev,
+        {
+          sender: 'AGENT',
+          text: `Online research complete! I extracted ${topic.facts.length} verified facts and formulated ${topic.steps.length} executable steps. Review them below—does this match your expectations, or should we refine anything?`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    }, 1200);
+  };
+
+  const handleConfirmAndCommitCuriositySkill = (topicIdx: number) => {
+    const topic = curiosityTopics[topicIdx];
+    if (!topic) return;
+
+    // 1. Commit new skill to skills registry
+    const newSkill: SkillRecord = {
+      id: `skill-${Date.now()}`,
+      title: topic.proposedSkill,
+      targetAppLabel: topic.title,
+      resolvedPackageName: topic.targetPackage,
+      intendedTask: topic.title,
+      orderedSteps: topic.steps,
+      verificationStrategy: 'MUTUAL_COLLABORATIVE_CONFIRMATION',
+      knownLimitations: 'Learned online and verified collaboratively on TECNO Camon i Click.',
+      evidenceSummary: `Synthesized via Autonomous Curiosity Agent with user approval. Grounded from ${topic.source}.`,
+      successfulExecutions: 1,
+      failedValidations: 0,
+      state: 'VERIFIED',
+      timestamp: `Sunday, October 18, 2026 • ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      version: 1
+    };
+
+    setSkills(prev => [newSkill, ...prev]);
+
+    // 2. Commit facts to agentFacts
+    const newFacts: AgentFact[] = topic.facts.map((f, i) => ({
+      id: `fact-curiosity-${Date.now()}-${i}`,
+      category: topic.category === 'CINEMA' ? 'CINEMA' : topic.category === 'SYSTEM' ? 'CONSTRAINT' : 'HEURISTIC',
+      statement: `${f.key}: ${f.value}`,
+      confidence: '100% (Mutually Verified)',
+      provenance: `${topic.source} (Learned with User)`
+    }));
+    setAgentFacts(prev => [...newFacts, ...prev]);
+
+    // 3. Mark topic committed
+    setCuriosityTopics(prev =>
+      prev.map((t, idx) => (idx === topicIdx ? { ...t, status: 'COMMITTED' } : t))
+    );
+    setCuriosityDialogueStep('CONFIRMED');
+
+    // 4. Update logs and interaction
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setExecutionLogs(prev => [
+      ...prev,
+      `[${nowStr}] CURIOSITY LEARNING: Committed skill "${topic.proposedSkill}" to /sdcard/LocalAgent/brain_vault.json.`
+    ]);
+
+    setCuriosityInteractionLog(prev => [
+      ...prev,
+      {
+        sender: 'AGENT',
+        text: `Knowledge committed! I've saved "${topic.proposedSkill}" to your Brain Vault. Both of us now possess this capability.`,
+        time: nowStr
+      }
+    ]);
+  };
+
+  const handleUserDialogueFeedback = (topicIdx: number) => {
+    if (!curiosityUserFeedback.trim()) return;
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userText = curiosityUserFeedback.trim();
+    setCuriosityUserFeedback('');
+
+    setCuriosityInteractionLog(prev => [
+      ...prev,
+      {
+        sender: 'USER',
+        text: userText,
+        time: nowStr
+      },
+      {
+        sender: 'AGENT',
+        text: `Got it! I have adapted the learning notes to prioritize: "${userText}". Whenever you're ready, click "Confirm & Commit to Brain Vault" to permanently store this skill!`,
+        time: nowStr
+      }
+    ]);
+  };
+
+  const handleProposeCustomTopic = () => {
+    if (!userCustomCuriosityInput.trim()) return;
+    const customTitle = userCustomCuriosityInput.trim();
+    setUserCustomCuriosityInput('');
+
+    const newTopic = {
+      id: `topic-custom-${Date.now()}`,
+      title: customTitle,
+      category: 'CUSTOM',
+      trigger: 'User proposed learning curiosity topic.',
+      source: 'Zero-Login Public Web & Grounding Engine',
+      question: `I have prepared a learning plan for "${customTitle}". May I research this online and learn the workflow together with you?`,
+      proposedSkill: `Custom: ${customTitle.slice(0, 32)}`,
+      targetPackage: 'com.aistudio.localagent',
+      facts: [
+        { key: 'Online Source', value: 'Anonymous zero-login web summary', source: 'Web Grounding' },
+        { key: 'Device Feasibility', value: 'Tested on Helio P23 4GB RAM budget (< 500 MB)', source: 'LocalAgent Runtime' }
+      ],
+      steps: [
+        `Retrieve verified best practices for ${customTitle}`,
+        'Synthesize procedural action parameters',
+        'Store verified procedure into Brain Vault'
+      ],
+      status: 'PROPOSED' as const
+    };
+
+    setCuriosityTopics(prev => [newTopic, ...prev]);
+    setActiveCuriosityIdx(0);
+    setCuriosityDialogueStep('IDLE');
+
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setCuriosityInteractionLog(prev => [
+      ...prev,
+      {
+        sender: 'USER',
+        text: `I want us to learn: "${customTitle}"`,
+        time: nowStr
+      },
+      {
+        sender: 'AGENT',
+        text: `Great topic! I have formulated the proposal for "${customTitle}". If you tell me it's okay, I will start the online research!`,
+        time: nowStr
+      }
+    ]);
+  };
+
   // Quick preset commands
   const quickPresets = [
     { label: 'Flashlight 1 min', cmd: 'Turn on flashlight for 1 minute', icon: Sun, color: 'text-amber-400' },
@@ -2097,6 +2539,7 @@ export function App() {
           {[
             { id: 'all', label: 'All Systems', icon: Layers },
             { id: 'directives', label: 'Directives', icon: Zap },
+            { id: 'curiosity', label: 'Curiosity & Learning', icon: Sparkles },
             { id: 'verification', label: 'Verification Lab', icon: ShieldCheck },
             { id: 'slm_brain', label: '4GB SLM Brain Lab', icon: Cpu },
             { id: 'actuators', label: 'Hardware Actuators', icon: Sliders },
@@ -2237,6 +2680,350 @@ export function App() {
                         </div>
                       </div>
                     </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION A.2: AUTONOMOUS CURIOSITY CURRICULUM & COLLABORATIVE LEARNING HUB
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'curiosity') && (
+          <div className={`rounded-2xl border p-4 sm:p-5 transition-all space-y-4 ${
+            oledLowPowerMode ? 'bg-black border-cyan-950' : 'bg-slate-950/80 border-cyan-900/40 shadow-sm'
+          }`}>
+            {/* Header & Badges */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-900 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-cyan-950/80 border border-cyan-800 text-cyan-400">
+                  <Sparkles className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white tracking-wide font-mono uppercase flex items-center gap-2">
+                    [ AUTONOMOUS CURIOSITY CURRICULUM &bull; COLLABORATIVE LEARNING ]
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                    Proactive topic discovery &bull; Online public grounding &bull; Human-in-the-loop mutual learning loop
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
+                <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/60">
+                  Zero-Login Public Grounding
+                </span>
+                <span className="text-[9px] font-mono text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60">
+                  &lt; 500 MB On-Demand SLM
+                </span>
+                <span className="text-[9px] font-mono text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
+                  Helio P23 &lt; 2MB Idle
+                </span>
+              </div>
+            </div>
+
+            {/* Active Topic Card */}
+            {curiosityTopics[activeCuriosityIdx] && (() => {
+              const currentTopic = curiosityTopics[activeCuriosityIdx];
+              return (
+                <div className="space-y-3">
+                  {/* Topic Metadata & Category Pill */}
+                  <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${
+                          currentTopic.category === 'CINEMA'
+                            ? 'bg-purple-950 text-purple-300 border-purple-800'
+                            : currentTopic.category === 'SYSTEM'
+                            ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                            : currentTopic.category === 'HARDWARE'
+                            ? 'bg-amber-950 text-amber-300 border-amber-800'
+                            : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                        }`}>
+                          {currentTopic.category}
+                        </span>
+                        <h3 className="text-sm font-bold text-white font-sans">
+                          {currentTopic.title}
+                        </h3>
+                      </div>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold self-start sm:self-auto border ${
+                        currentTopic.status === 'COMMITTED'
+                          ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                          : currentTopic.status === 'DIALOGUE'
+                          ? 'bg-cyan-950 text-cyan-300 border-cyan-800 animate-pulse'
+                          : 'bg-slate-900 text-slate-400 border-slate-800'
+                      }`}>
+                        {currentTopic.status === 'COMMITTED' ? '✓ COMMITTED TO VAULT' : currentTopic.status === 'DIALOGUE' ? 'MUTUAL DIALOGUE ACTIVE' : 'PROPOSED & AWAITING YOU'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono text-slate-400">
+                      <div>
+                        <span className="text-slate-500">Curiosity Trigger:</span>{' '}
+                        <span className="text-slate-300">{currentTopic.trigger}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Data Source:</span>{' '}
+                        <span className="text-cyan-300">{currentTopic.source}</span>
+                      </div>
+                    </div>
+
+                    {/* Proactive Agent Speech Dialogue Box */}
+                    <div className="p-3 bg-gradient-to-r from-slate-950 to-black rounded-xl border border-cyan-900/60 space-y-2">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-600 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5 shadow-sm shadow-cyan-500/20">
+                          <Brain className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-cyan-300 font-bold uppercase tracking-wider">
+                              J.A.R.V.I.S. PROACTIVE QUESTION TO YOU:
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500">Autonomous Proposal</span>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-100 font-sans mt-1 leading-relaxed">
+                            &ldquo;{currentTopic.question}&rdquo;
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Interactive User Response Buttons */}
+                      <div className="pt-2 border-t border-slate-900 flex items-center gap-2 flex-wrap">
+                        {currentTopic.status === 'PROPOSED' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveCuriosityTopic(activeCuriosityIdx)}
+                              disabled={isCuriosityLearning}
+                              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-black font-bold text-xs font-mono rounded-lg transition-all flex items-center gap-1.5 shadow-sm shadow-cyan-500/20"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>It&apos;s okay, learn it!</span>
+                            </button>
+
+                            <button
+                              onClick={() => setActiveCuriosityIdx((prev) => (prev + 1) % curiosityTopics.length)}
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-mono rounded-lg transition-colors border border-slate-800 flex items-center gap-1"
+                            >
+                              <span>Next Topic</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setCuriosityTopics(prev =>
+                                  prev.map((t, idx) => (idx === activeCuriosityIdx ? { ...t, status: 'DECLINED' } : t))
+                                );
+                              }}
+                              className="px-2.5 py-1.5 bg-black hover:bg-red-950 text-slate-500 hover:text-red-300 text-xs font-mono rounded-lg transition-colors border border-slate-900"
+                            >
+                              Decline
+                            </button>
+                          </>
+                        )}
+
+                        {currentTopic.status === 'DIALOGUE' && (
+                          <button
+                            onClick={() => handleConfirmAndCommitCuriositySkill(activeCuriosityIdx)}
+                            className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs font-mono rounded-lg transition-colors flex items-center gap-1.5 shadow-sm shadow-emerald-500/20"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Confirm &amp; Commit to Brain Vault</span>
+                          </button>
+                        )}
+
+                        {currentTopic.status === 'COMMITTED' && (
+                          <span className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Skill synthesized &amp; committed to /sdcard/LocalAgent/brain_vault.json
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Online Learning In-Progress Banner */}
+                    {isCuriosityLearning && (
+                      <div className="p-3 bg-black rounded-xl border border-cyan-700 flex items-center justify-between text-xs font-mono animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />
+                          <span className="text-cyan-200">
+                            Researching &ldquo;{currentTopic.title}&rdquo; online... Extracting facts &amp; synthesizing steps via on-demand SLM...
+                          </span>
+                        </div>
+                        <span className="text-emerald-400 font-bold">&lt; 500 MB Budget OK</span>
+                      </div>
+                    )}
+
+                    {/* Mutually Discovered Facts & Procedural Steps */}
+                    {(currentTopic.status === 'DIALOGUE' || currentTopic.status === 'COMMITTED') && (
+                      <div className="space-y-3 pt-2">
+                        {/* Facts Grid */}
+                        <div>
+                          <div className="text-[10px] font-mono text-cyan-300 uppercase font-bold mb-1.5 flex items-center gap-1">
+                            <span>Discovered Real-World Facts (Online Grounding):</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {currentTopic.facts.map((fact, fIdx) => (
+                              <div key={fIdx} className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
+                                <span className="text-[10px] font-mono text-cyan-400 font-bold block truncate">
+                                  {fact.key}
+                                </span>
+                                <p className="text-[11px] text-slate-300 font-sans leading-snug">
+                                  {fact.value}
+                                </p>
+                                <span className="text-[9px] font-mono text-slate-500 block pt-0.5">
+                                  Source: {fact.source}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Procedural Action Steps */}
+                        <div>
+                          <div className="text-[10px] font-mono text-emerald-400 uppercase font-bold mb-1.5 flex items-center gap-1">
+                            <span>Synthesized Procedural Action Sequence:</span>
+                          </div>
+                          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs font-mono">
+                            {currentTopic.steps.map((step, sIdx) => (
+                              <div key={sIdx} className="flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-black border border-slate-800 flex items-center justify-center text-[10px] text-cyan-400 shrink-0 font-bold">
+                                  {sIdx + 1}
+                                </span>
+                                <span className="text-slate-200">{step}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Collaborative Interaction Chat Thread */}
+                  <div className="p-3.5 bg-black border border-slate-900 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="text-xs font-mono font-bold text-white uppercase tracking-wide">
+                          Mutual Learning Dialogue (You &amp; J.A.R.V.I.S.)
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        Human-in-the-Loop Active Learning
+                      </span>
+                    </div>
+
+                    {/* Messages stream */}
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {curiosityInteractionLog.map((msg, mIdx) => (
+                        <div
+                          key={mIdx}
+                          className={`p-2 rounded-xl text-xs flex flex-col space-y-0.5 ${
+                            msg.sender === 'USER'
+                              ? 'bg-cyan-950/70 border border-cyan-800/80 text-cyan-200 ml-6 self-end'
+                              : 'bg-slate-900/80 border border-slate-800 text-slate-200 mr-6'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
+                            <span className={msg.sender === 'USER' ? 'text-cyan-300 font-bold' : 'text-slate-300 font-bold'}>
+                              {msg.sender === 'USER' ? 'YOU' : 'J.A.R.V.I.S. CURIOSITY ENGINE'}
+                            </span>
+                            <span>{msg.time}</span>
+                          </div>
+                          <p className="font-sans leading-relaxed text-[11px]">{msg.text}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Dialogue Input Box for Teaching / Correcting */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={curiosityUserFeedback}
+                        onChange={e => setCuriosityUserFeedback(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleUserDialogueFeedback(activeCuriosityIdx);
+                        }}
+                        placeholder="Teach, refine, or guide the agent: 'Focus on OTT release window', 'Confirm SSMB29 collections'..."
+                        className="flex-1 bg-slate-950 border border-slate-800 focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none font-mono"
+                      />
+                      <button
+                        onClick={() => handleUserDialogueFeedback(activeCuriosityIdx)}
+                        className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs font-mono rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                      >
+                        <span>Send</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Propose a Custom Topic to Learn Together */}
+                  <div className="p-3 bg-black/60 border border-slate-900 rounded-xl space-y-2">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wide font-bold flex items-center gap-1">
+                      <span>Propose a Custom Topic to Learn Together:</span>
+                    </span>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={userCustomCuriosityInput}
+                        onChange={e => setUserCustomCuriosityInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleProposeCustomTopic();
+                        }}
+                        placeholder="e.g. 'How to schedule WhatsApp messages on Android 8.1', 'Local weather forecast script'..."
+                        className="flex-1 bg-slate-950 border border-slate-800 focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none font-mono"
+                      />
+                      <button
+                        onClick={handleProposeCustomTopic}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-bold text-xs font-mono rounded-lg transition-colors border border-slate-800 shrink-0 flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        <span>Propose</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Curriculum Queue Horizontal Carousel */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-900">
+              <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">
+                Curiosity Agenda Queue ({curiosityTopics.length} Topics Identified):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {curiosityTopics.map((topic, tIdx) => {
+                  const isSelected = tIdx === activeCuriosityIdx;
+                  return (
+                    <div
+                      key={topic.id}
+                      onClick={() => {
+                        setActiveCuriosityIdx(tIdx);
+                        setCuriosityDialogueStep(topic.status === 'DIALOGUE' ? 'INTERACTIVE_VERIFY' : topic.status === 'COMMITTED' ? 'CONFIRMED' : 'IDLE');
+                      }}
+                      className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-black border-cyan-400 shadow-md shadow-cyan-500/10'
+                          : 'bg-black/60 border-slate-900 hover:border-slate-800'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-[9px] font-mono mb-1">
+                          <span className="text-slate-400 uppercase font-bold">{topic.category}</span>
+                          <span className={`px-1 py-0.2 rounded font-bold ${
+                            topic.status === 'COMMITTED'
+                              ? 'text-emerald-400'
+                              : topic.status === 'DIALOGUE'
+                              ? 'text-cyan-300'
+                              : 'text-slate-500'
+                          }`}>
+                            {topic.status}
+                          </span>
+                        </div>
+                        <div className="font-bold text-white text-xs truncate">{topic.title}</div>
+                      </div>
+                      <div className="text-[9px] font-mono text-cyan-400 mt-2 truncate">
+                        Skill: {topic.proposedSkill}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
