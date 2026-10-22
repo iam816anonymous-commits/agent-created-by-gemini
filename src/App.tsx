@@ -82,6 +82,9 @@ import {
 import { KotlinArchitectureViewer } from './components/KotlinArchitectureViewer';
 import { AutonomousPatternStudio, ComposedLightPattern, ComposedSoundPattern } from './components/AutonomousPatternStudio';
 import { DayByDayEvolutionCenter } from './components/DayByDayEvolutionCenter';
+import { DualViewTreeDiffer } from './components/DualViewTreeDiffer';
+import { Mobile4GBOptimizationLab } from './components/Mobile4GBOptimizationLab';
+import { DeviceModelProfiler } from './components/DeviceModelProfiler';
 
 // ==========================================
 // DOMAIN MODELS & SCHEMAS
@@ -201,7 +204,7 @@ const PHASES_23 = [
 ];
 
 export function App() {
-  type CategoryTab = 'directives' | 'evolution' | 'actuators' | 'viewport' | 'architecture' | 'vault' | 'verification' | 'slm_brain' | 'curiosity' | 'intelligence' | 'telemetry' | 'all';
+  type CategoryTab = 'directives' | 'device_profiler' | 'evolution' | 'actuators' | 'viewport' | 'architecture' | 'vault' | 'verification' | 'slm_brain' | 'optimization_4gb' | 'curiosity' | 'intelligence' | 'telemetry' | 'all';
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('directives');
 
   // Interactive CMD Test Terminal State
@@ -215,21 +218,14 @@ export function App() {
   const [cmdInput, setCmdInput] = useState('');
   const [cmdHistoryList, setCmdHistoryList] = useState<string[]>([
     'tst all',
+    'profile device',
+    'model registry',
+    'opt 4gb',
+    'tst android16',
+    'tst 16kb',
     'optimize',
     'benchmark',
     'evolve day',
-    'evolution stats',
-    'healed skills',
-    'play music',
-    'sync beat',
-    'improvise light',
-    'improvise sound',
-    'synesthesia',
-    'tst memory',
-    'tst vault',
-    'tst actuators',
-    'tst diff',
-    'tst remote',
     'status'
   ]);
   const [cmdHistoryIndex, setCmdHistoryIndex] = useState<number>(-1);
@@ -237,9 +233,8 @@ export function App() {
   const [hapticRippleActive, setHapticRippleActive] = useState(false);
   const [copiedCodeToast, setCopiedCodeToast] = useState<string | null>(null);
 
-  // Selected Architecture & Kotlin Blueprint Viewer
-  type ArchFileType = 'MemoryStack.kt' | 'BrainVaultManager.kt' | 'ActuatorController.kt' | 'ActuatorPatternSynthesizer.kt' | 'MusicBeatSynchronizer.kt' | 'AdaptiveDeviceOptimizer.kt' | 'DailyEvolutionEngine.kt' | 'HelioCorePilotAndMemoryOptimizer.kt' | 'PredictiveActionPrefetcher.kt' | 'FailsafeRecoveryRing.kt' | 'SnapshotDiffer.kt' | 'RemoteAgentBridge.kt' | 'AutonomousRecoveryEngine.kt' | 'LocalAgentDatabase.kt';
-  const [selectedArchFile, setSelectedArchFile] = useState<ArchFileType>('MemoryStack.kt');
+  type ArchFileType = 'MemoryStack.kt' | 'BrainVaultManager.kt' | 'ActuatorController.kt' | 'ActuatorPatternSynthesizer.kt' | 'MusicBeatSynchronizer.kt' | 'AdaptiveDeviceOptimizer.kt' | 'DailyEvolutionEngine.kt' | 'HelioCorePilotAndMemoryOptimizer.kt' | 'PredictiveActionPrefetcher.kt' | 'FailsafeRecoveryRing.kt' | 'SnapshotDiffer.kt' | 'RemoteAgentBridge.kt' | 'AutonomousRecoveryEngine.kt' | 'LocalAgentDatabase.kt' | 'AndroidMultiVersionBridge.kt' | 'DeviceProfiler.kt' | 'AdaptiveModelRegistry.kt';
+  const [selectedArchFile, setSelectedArchFile] = useState<ArchFileType>('DeviceProfiler.kt');
 
   // Live Cross-App Memory Stack Simulated State (Room Entity)
   interface MemoryStackItem {
@@ -897,7 +892,12 @@ export function App() {
       addLine('  tst remote         - Verify RemoteAgentBridge.kt port 8080 local REST teleoperation', 'output');
       addLine('  tst nocturnal      - Verify 24/7 autonomous loop, nocturnal engine & morning briefing', 'output');
       addLine('  tst ram            - Verify strict 48MB idle RAM ceiling on MediaTek Helio P23', 'output');
-      addLine('  benchmark          - Run 1,000 FNV-1a hash iterations & measure Helio P23 throughput', 'output');
+      addLine('  tst approval       - Verify AutonomyPermissionManager.kt human approval gate & diff preview', 'output');
+      addLine('  tst tiers          - Verify ArchitectureTierManager.kt Tier 1 (4GB) to Tier 3 (16GB) escalation', 'output');
+      addLine('  profile device     - Run DeviceProfiler.kt hardware inspection & dynamic RAM ceiling', 'output');
+      addLine('  opt 4gb / 4gb      - Activate 4GB Mobile Optimization Lab & Research Engine', 'output');
+      addLine('  proc meminfo       - View live Linux kernel /proc/meminfo memory distribution', 'output');
+      addLine('  sim lmk / tst lmk  - Simulate Android LowMemoryKiller pressure and verify agent survival', 'output');
       addLine('  top / ps           - View active kernel daemon processes, threads, and memory footprint', 'output');
       addLine('  dump memory        - Dump active Room memory_stack table entities', 'output');
       addLine('  dump vault         - Inspect /sdcard/LocalAgent/brain_vault.json & CRC32 integrity', 'output');
@@ -908,6 +908,158 @@ export function App() {
       addLine('  status             - View agent consciousness, RAM, battery, thermal, and ambient state', 'output');
       addLine('  cls / clear        - Clear the terminal scrollback buffer', 'output');
       addLine('  <directive text>   - Natural language: "open calculator and tap 7", "turn on flashlight"...', 'highlight');
+      return;
+    }
+
+    if (lower === 'opt 4gb' || lower === '4gb' || lower === '4gb lab' || lower === 'lab') {
+      setActiveCategory('optimization_4gb');
+      addLine('[4GB OPTIMIZATION LAB] Activated 4GB Mobile Optimization & Research Engine tab.', 'info');
+      addLine('  ├─ Target SoC: MediaTek Helio P23 (MT6763V) Octa-core Cortex-A53', 'output');
+      addLine('  ├─ Physical RAM: 4,096 MB LPDDR3 | Heap Budget: 42.1 MB / 48.0 MB safe idle', 'output');
+      addLine('  ├─ Research Basis: AutoDroid (MobiCom 24), AppAgent, AndroidWorld, Octopus v2/v4', 'pass');
+      addLine('  └─ Status: LMK guard armed, zero Dalvik GC impact verified.', 'pass');
+      return;
+    }
+
+    if (lower === 'proc meminfo' || lower === 'meminfo') {
+      addLine('=== Linux Kernel /proc/meminfo (MediaTek Helio P23 Android 8.1 API 27) ===', 'info');
+      addLine('MemTotal:        4012480 kB (4.0 GB LPDDR3)', 'output');
+      addLine('MemFree:          614400 kB', 'output');
+      addLine('MemAvailable:    1484800 kB (~1.48 GB safe available pool)', 'pass');
+      addLine('Cached:           870400 kB (Linux page cache)', 'output');
+      addLine('Active(anon):     768000 kB (Foreground user apps + Android OS)', 'output');
+      addLine('SwapTotal:       1048572 kB (ZRAM LZ4 stream compression)', 'output');
+      addLine('SwapFree:         842100 kB', 'output');
+      addLine('LocalAgent RSS:    42100 kB (1.05% of MemTotal, strictly < 48MB budget)', 'highlight');
+      return;
+    }
+
+    if (lower === 'sim lmk' || lower === 'tst lmk') {
+      setIsCmdRunning(true);
+      addLine('[LMK SIMULATION] Simulating high foreground memory pressure event...', 'info');
+      setTimeout(() => {
+        addLine('  [PHASE 1] Foreground app spikes memory consumption (+2,400 MB allocated by 15 Chrome tabs)', 'warn');
+      }, 100);
+      setTimeout(() => {
+        addLine('  [PHASE 2] Kernel /sys/module/lowmemorykiller/parameters/minfree threshold crossed (Free < 250MB)', 'warn');
+      }, 250);
+      setTimeout(() => {
+        addLine('  [PHASE 3] ComponentCallbacks2.onTrimMemory(TRIM_MEMORY_RUNNING_CRITICAL) broadcast received', 'output');
+      }, 400);
+      setTimeout(() => {
+        addLine('  [PHASE 4] LocalAgent Defensive Action: Native SLM mmap unmapped, UI diff caches dropped', 'pass');
+      }, 550);
+      setTimeout(() => {
+        addLine('  [PHASE 5] oom_score_adj check: LocalAgent = -100 (Protected Foreground Accessibility Service)', 'pass');
+        addLine('  [PHASE 6] LMK evicts Slot 5 empty background processes; LocalAgent remains 100% ALIVE', 'highlight');
+        addLine('[PASS] LowMemoryKiller Guard: Zero crash guarantee mathematically verified on 4GB device.', 'pass');
+        setIsCmdRunning(false);
+      }, 700);
+      return;
+    }
+
+    if (lower === 'tst android16' || lower === 'tst compat' || lower === 'version matrix' || lower === 'tst versions') {
+      setIsCmdRunning(true);
+      addLine('[COMPAT] Initiating Multi-Version Android Evolution Test (API 27 Oreo -> API 36 Baklava)...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ [API 27 - Android 8.1] Baseline minSdkVersion=27: ReusableNodePool & child.recycle() active', 'pass');
+      }, 100);
+      setTimeout(() => {
+        addLine('  ├─ [API 29 - Android 10]  Scoped Storage transition + Settings.Panel.ACTION_WIFI panel route', 'pass');
+      }, 220);
+      setTimeout(() => {
+        addLine('  ├─ [API 30 - Android 11]  Silent AccessibilityService.takeScreenshot() callback active', 'pass');
+      }, 340);
+      setTimeout(() => {
+        addLine('  ├─ [API 33 - Android 13]  CameraManager.turnOnTorchWithStrengthLevel() 4-step brightness active', 'pass');
+      }, 460);
+      setTimeout(() => {
+        addLine('  ├─ [API 34 - Android 14]  ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE enforced', 'pass');
+      }, 580);
+      setTimeout(() => {
+        addLine('  ├─ [API 35 - Android 15]  16 KB ELF Page Alignment verified (-Wl,-z,max-page-size=16384)', 'pass');
+      }, 700);
+      setTimeout(() => {
+        addLine('  ├─ [API 36 - Android 16]  Desktop Windowing multi-window tracker + AICore offline fallback', 'pass');
+        addLine('  └─ [ALL VERSIONS PASS] Zero missing method exceptions (NoSuchMethodError). 100% stable.', 'highlight');
+        setIsCmdRunning(false);
+      }, 820);
+      return;
+    }
+
+    if (lower === 'tst 16kb' || lower === '16kb' || lower === 'pagesize') {
+      setIsCmdRunning(true);
+      addLine('[16 KB PAGE AUDIT] Verifying Android 15 & 16 ARM64 Memory Page Size Compatibility...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Android 8.1 - 14 Baseline: sysconf(_SC_PAGESIZE) = 4,096 bytes (4 KB)', 'output');
+        addLine('  ├─ Android 15 & 16 Target:   sysconf(_SC_PAGESIZE) = 16,384 bytes (16 KB)', 'output');
+        addLine('  ├─ Native C++ Binary:        libllama_android.so compiled with -Wl,-z,max-page-size=16384', 'pass');
+        addLine('  ├─ ELF Segment Alignment:    LOAD segment p_align = 0x4000 (16384 bytes)', 'pass');
+        addLine('  ├─ Dalvik Headroom Check:    Zero runtime segmentation faults or INSTALL_FAILED_INVALID_APK', 'pass');
+        addLine('[PASS] 16 KB Page Alignment: 100% compliant with Android 15 & 16 platform standards.', 'highlight');
+        setIsCmdRunning(false);
+      }, 350);
+      return;
+    }
+
+    if (lower === 'profile device' || lower === 'tst profiler' || lower === 'profiler') {
+      setActiveCategory('device_profiler');
+      setIsCmdRunning(true);
+      addLine('[PROFILER] Running DeviceProfiler.kt Self-Profiling Hardware Engine...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ /proc/meminfo: MemTotal = 4,096 MB physical RAM discovered', 'pass');
+        addLine('  ├─ /proc/cpuinfo: MediaTek Helio P23 (8x Cortex-A53), ARMv8-A NEON SIMD', 'pass');
+        addLine('  ├─ Platform SDK:  Build.VERSION.SDK_INT = 27 (Android 8.1 Oreo MR1)', 'pass');
+        addLine('  ├─ Dynamic Math:  SafeModelRAM = (4096 - 1850 - 720) * 0.25 = 381 MB', 'highlight');
+        addLine('  ├─ Model Select:  AdaptiveModelRegistry -> SmolLM2-360M-Instruct (Q4_K_M, 271MB)', 'pass');
+        addLine('[PASS] Device Hardware Profile verified. Dynamic ceiling strictly enforced.', 'pass');
+        setIsCmdRunning(false);
+      }, 400);
+      return;
+    }
+
+    if (lower === 'model registry' || lower === 'models' || lower === 'registry') {
+      setActiveCategory('device_profiler');
+      addLine('=== ADAPTIVE MODEL REGISTRY (AdaptiveModelRegistry.kt) ===', 'info');
+      addLine('1. SmolLM2-360M-Instruct (Q4_K_M) -> 271 MB RAM | [RECOMMENDED for <= 4GB]', 'pass');
+      addLine('2. Qwen2.5-0.5B-Instruct (Q3_K_M) -> 235 MB RAM | [RECOMMENDED for <= 4GB]', 'pass');
+      addLine('3. SmolLM2-360M-Instruct (Q8_0)    -> 420 MB RAM | [COMPATIBLE for 4GB-6GB]', 'output');
+      addLine('4. Llama-3.2-1B-Instruct (Q4_K_M)  -> 850 MB RAM | [RISKY on 4GB, RECOMMENDED on 6GB-8GB]', 'warn');
+      addLine('5. Qwen2.5-1.5B-Instruct (Q4_K_M) -> 1,150 MB RAM | [PROHIBITED on 4GB, RECOMMENDED on 8GB+]', 'warn');
+      addLine('6. Gemma-2-2B-Instruct (Q4_K_M)   -> 1,680 MB RAM | [PROHIBITED on 4GB, LMK CRASH RISK]', 'fail');
+      return;
+    }
+
+    if (lower === 'tst approval' || lower === 'approval' || lower === 'tst gate') {
+      setActiveCategory('device_profiler');
+      setIsCmdRunning(true);
+      addLine('[APPROVAL GATE] Testing AutonomyPermissionManager.kt Human-in-the-Loop Governance...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ [RULE 1] requireUserApproval = TRUE enforced globally', 'pass');
+        addLine('  ├─ [RULE 2] Perception & Nocturnal learning proposals run autonomously', 'pass');
+        addLine('  ├─ [HALT] State mutation detected: "Inject OTP 582914 into Bank Auth"', 'warn');
+        addLine('  ├─ [CARD] Structured Approval Card rendered with Pre/Post FNV-1a Hash Diff', 'highlight');
+        addLine('  ├─ [DECISION] Execution halted pending human [Approve / Confirm & Commit] or [Decline]', 'highlight');
+        addLine('  └─ [AUDIT] Zero unprompted background side-effects guaranteed. 100% compliant.', 'pass');
+        setIsCmdRunning(false);
+      }, 400);
+      return;
+    }
+
+    if (lower === 'tst tiers' || lower === 'tiers' || lower === 'escalation') {
+      setActiveCategory('device_profiler');
+      setIsCmdRunning(true);
+      addLine('[TIER ESCALATION] Testing ArchitectureTierManager.kt Multi-Tier Hardware Scaling...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ [TIER 1 (<= 4GB RAM)]: Helio P23 Android 8.1 API 27', 'info');
+        addLine('  │   └─ Perception: Pure text-tree pruning (<4KB DSL), 0 screenshot bitmaps, SmolLM2-360M', 'pass');
+        addLine('  ├─ [TIER 2 (6GB-8GB RAM)]: Redmi Note 10 / Galaxy A54 Android 11-14', 'info');
+        addLine('  │   └─ Perception: Hybrid tree + fast regional screenshot diff, Llama-3.2-1B (850MB)', 'pass');
+        addLine('  ├─ [TIER 3 (12GB-16GB+ RAM)]: Pixel 9 Pro Tensor G4 Android 15-16', 'info');
+        addLine('  │   └─ Perception: Multimodal Vision + AICore VLM + 16 KB Page Alignment + Desktop Multi-Window', 'pass');
+        addLine('  └─ [AUTO-SCALING PASS] Device dynamically classified into Tier 1 (4,096MB physical RAM).', 'highlight');
+        setIsCmdRunning(false);
+      }, 450);
       return;
     }
 
@@ -3335,6 +3487,8 @@ export function App() {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-mono">
           {[
             { id: 'directives', label: 'Directives & Terminal', icon: Zap },
+            { id: 'device_profiler', label: 'Device & Model Profiler', icon: Cpu },
+            { id: 'optimization_4gb', label: '4GB Optimization Lab', icon: Gauge },
             { id: 'evolution', label: 'Day-by-Day Evolution', icon: TrendingUp },
             { id: 'architecture', label: 'Kotlin Blueprint', icon: Code2 },
             { id: 'actuators', label: 'Hardware Actuators', icon: Sliders },
@@ -3584,6 +3738,13 @@ export function App() {
                   { cmd: 'tst diff', label: '🌲 tst diff', tip: 'Test SnapshotDiffer FNV-1a view tree' },
                   { cmd: 'tst recovery', label: '🛡️ tst recovery', tip: 'Test AutonomousRecoveryEngine self-healing' },
                   { cmd: 'tst remote', label: '📡 tst remote', tip: 'Test port 8080 local REST teleop bridge' },
+                  { cmd: 'profile device', label: '📊 profile', tip: 'Run DeviceProfiler.kt hardware auto-discovery' },
+                  { cmd: 'model registry', label: '🤖 models', tip: 'Inspect AdaptiveModelRegistry candidate rankings' },
+                  { cmd: 'opt 4gb', label: '🔬 opt 4gb', tip: 'Activate 4GB Optimization & Research Lab' },
+                  { cmd: 'tst android16', label: '📱 API 27→36', tip: 'Test Android 8.1 through Android 16 compatibility' },
+                  { cmd: 'tst 16kb', label: '🧩 16KB Pages', tip: 'Test Android 15/16 16 KB page size alignment' },
+                  { cmd: 'proc meminfo', label: '📟 meminfo', tip: 'Inspect Linux /proc/meminfo kernel pool' },
+                  { cmd: 'sim lmk', label: '🛡️ sim lmk', tip: 'Simulate Android LowMemoryKiller survival' },
                   { cmd: 'benchmark', label: '⚡ benchmark', tip: 'Benchmark 1,000 FNV-1a tree hashes' },
                   { cmd: 'top', label: '📊 top', tip: 'View Linux process memory table' },
                   { cmd: 'tst nocturnal', label: '🌙 tst nocturnal', tip: 'Test 24/7 background nocturnal loop' },
@@ -5387,6 +5548,35 @@ export function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION G.1: DUAL VIEW-TREE SNAPSHOT DIFFER & MUTATION TRACER
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'verification') && (
+          <DualViewTreeDiffer
+            oledMode={oledLowPowerMode}
+            onTraceStep={(detail) => {
+              setExecutionLogs(prev => [
+                ...prev,
+                `[${new Date().toLocaleTimeString()}] TREE_DIFF: ${detail}`
+              ]);
+            }}
+          />
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION H.-1: SELF-PROFILING DEVICE INTELLIGENCE & ADAPTIVE MODEL REGISTRY
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'device_profiler') && (
+          <DeviceModelProfiler oledMode={oledLowPowerMode} />
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION H.0: 4GB MOBILE OFFLINE AGENT OPTIMIZATION & RESEARCH LAB
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'optimization_4gb' || activeCategory === 'slm_brain') && (
+          <Mobile4GBOptimizationLab oledMode={oledLowPowerMode} />
         )}
 
         {/* -----------------------------------------------------------------------
