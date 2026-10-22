@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Cpu,
   Gauge,
@@ -77,6 +77,13 @@ export interface MockApprovalProposal {
   timestamp: string;
 }
 
+export interface DeviceModelProfilerProps {
+  oledMode?: boolean;
+  selectedPresetId?: string;
+  onSelectPreset?: (preset: DeviceHardwareProfile, tier: 'TIER_1' | 'TIER_2' | 'TIER_3') => void;
+  onRequestApproval?: (proposal: MockApprovalProposal) => void;
+}
+
 export const DEVICE_PRESETS: DeviceHardwareProfile[] = [
   {
     id: 'tecno_in6_helio_p23',
@@ -130,8 +137,8 @@ export const DEVICE_PRESETS: DeviceHardwareProfile[] = [
     totalRamMb: 16384,
     osOverheadMb: 3400,
     activeAppBufferMb: 1800,
-    androidSdk: 35,
-    androidVersion: 'Android 15 (16 KB Pages Enforced)',
+    androidSdk: 36,
+    androidVersion: 'Android 15–17 (API 35–37+ / 16 KB Pages)',
     pageSizeBytes: 16384
   }
 ];
@@ -217,8 +224,19 @@ export const CANDIDATE_MODELS: ModelCandidate[] = [
   }
 ];
 
-export function DeviceModelProfiler({ oledMode = false }: { oledMode?: boolean }) {
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('tecno_in6_helio_p23');
+export function DeviceModelProfiler({
+  oledMode = false,
+  selectedPresetId: propSelectedPresetId,
+  onSelectPreset,
+  onRequestApproval
+}: DeviceModelProfilerProps) {
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(propSelectedPresetId || 'tecno_in6_helio_p23');
+
+  useEffect(() => {
+    if (propSelectedPresetId && propSelectedPresetId !== selectedPresetId) {
+      setSelectedPresetId(propSelectedPresetId);
+    }
+  }, [propSelectedPresetId]);
   const [customRamMb, setCustomRamMb] = useState<number>(4096);
   const [customOsOverheadMb, setCustomOsOverheadMb] = useState<number>(1850);
   const [customAppBufferMb, setCustomAppBufferMb] = useState<number>(720);
@@ -568,7 +586,11 @@ export function DeviceModelProfiler({ oledMode = false }: { oledMode?: boolean }
             {DEVICE_PRESETS.map(preset => (
               <button
                 key={preset.id}
-                onClick={() => setSelectedPresetId(preset.id)}
+                onClick={() => {
+                  setSelectedPresetId(preset.id);
+                  const tier: 'TIER_1' | 'TIER_2' | 'TIER_3' = preset.totalRamMb <= 4096 ? 'TIER_1' : preset.totalRamMb <= 8192 ? 'TIER_2' : 'TIER_3';
+                  onSelectPreset?.(preset, tier);
+                }}
                 className={`p-2.5 rounded-xl border text-left transition-all ${
                   selectedPresetId === preset.id
                     ? 'bg-cyan-950/60 text-white border-cyan-400 shadow-sm shadow-cyan-500/20'

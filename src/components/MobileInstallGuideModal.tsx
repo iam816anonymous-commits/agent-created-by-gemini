@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Smartphone,
-  QrCode,
   Download,
   Copy,
   Check,
@@ -15,7 +14,11 @@ import {
   Battery,
   AlertCircle,
   FileCode,
-  CheckCircle2
+  CheckCircle2,
+  FolderDown,
+  Info,
+  Sliders,
+  Settings
 } from 'lucide-react';
 
 interface MobileInstallGuideModalProps {
@@ -29,7 +32,7 @@ export const MobileInstallGuideModal: React.FC<MobileInstallGuideModalProps> = (
   onClose,
   sharedUrl
 }) => {
-  const [activeTab, setActiveTab] = useState<'pwa' | 'apk'>('pwa');
+  const [activeTab, setActiveTab] = useState<'direct' | 'firefox_pwa' | 'apk_build'>('direct');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
 
@@ -50,17 +53,17 @@ export const MobileInstallGuideModal: React.FC<MobileInstallGuideModalProps> = (
   const adbCommands = `# 1. Build Debug APK with 16KB Page Alignment support
 ./gradlew assembleDebug
 
-# 2. Connect phone via USB or Wi-Fi ADB (IP:5555)
+# 2. Connect TECNO phone via USB with USB Debugging enabled
 adb devices
 
-# 3. Install APK granting runtime permissions (-g)
-adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+# 3. Install APK directly granting all runtime permissions (-g)
+adb install -r -g LocalAgent-v2.5-arm64-api27.apk
 
 # 4. Activate AccessibilityService automatically via ADB
 adb shell settings put secure enabled_accessibility_services com.example.localagent/.LocalAgentAccessibilityService
 adb shell settings put secure accessibility_enabled 1
 
-# 5. Whitelist LocalAgent from aggressive Doze battery sleep
+# 5. Whitelist LocalAgent from aggressive HiOS / Android Doze sleep
 adb shell dumpsys deviceidle whitelist +com.example.localagent
 
 # 6. Verify 42MB idle RAM ceiling on MediaTek Helio P23
@@ -72,18 +75,18 @@ adb shell dumpsys meminfo com.example.localagent`;
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-slate-900 bg-black/90">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
-              <Smartphone className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+              <Download className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-wide uppercase flex items-center gap-2">
-                <span>[ MOBILE INSTALLATION &amp; TESTING GUIDE ]</span>
+                <span>[ DIRECT APK DOWNLOAD &amp; MOBILE INSTALL ]</span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
-                  Android 8.1 &rarr; Android 16
+                  TECNO &bull; Android 8.1 &rarr; 16
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                Two ways to test LocalAgent on your phone: Instant PWA Mobile Launcher or Native AOSP APK
+                Download the standalone Android APK directly to your phone or add to Home Screen
               </p>
             </div>
           </div>
@@ -97,190 +100,300 @@ adb shell dumpsys meminfo com.example.localagent`;
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-900 bg-black/50 px-4 pt-2 gap-2 text-xs">
+        <div className="flex border-b border-slate-900 bg-black/50 px-4 pt-2 gap-2 text-xs overflow-x-auto no-scrollbar">
           <button
-            onClick={() => setActiveTab('pwa')}
-            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 ${
-              activeTab === 'pwa'
+            onClick={() => setActiveTab('direct')}
+            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === 'direct'
+                ? 'text-emerald-400 border-emerald-400'
+                : 'text-slate-400 border-transparent hover:text-slate-200'
+            }`}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Direct APK Download (Recommended for TECNO &amp; Firefox)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('firefox_pwa')}
+            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === 'firefox_pwa'
                 ? 'text-cyan-400 border-cyan-400'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
             <Zap className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Method 1: Instant Mobile PWA (0 Setup &bull; 1-Tap)</span>
+            <span>Firefox &amp; Browser Home Screen Guide</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('apk')}
-            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 ${
-              activeTab === 'apk'
-                ? 'text-emerald-400 border-emerald-400'
+            onClick={() => setActiveTab('apk_build')}
+            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === 'apk_build'
+                ? 'text-indigo-400 border-indigo-400'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
-            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Method 2: Native Android APK (ADB / Gradle)</span>
+            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+            <span>ADB &amp; Source Code</span>
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-slate-300 scrollbar-thin scrollbar-thumb-slate-800">
+
           {/* =========================================================================
-              METHOD 1: INSTANT MOBILE PWA
+              TAB 1: DIRECT DOWNLOAD APK (PRIMARY FOR FIREFOX & TECNO)
               ========================================================================= */}
-          {activeTab === 'pwa' && (
+          {activeTab === 'direct' && (
             <div className="space-y-4 font-sans text-xs">
-              <div className="p-3.5 bg-cyan-950/20 border border-cyan-800/40 rounded-xl space-y-2">
-                <div className="flex items-center gap-2 text-cyan-300 font-bold uppercase font-mono text-[11px]">
-                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <span>Fastest Path: Run directly on your phone's screen in seconds</span>
+              {/* Notice for Firefox Users */}
+              <div className="p-3.5 bg-amber-950/20 border border-amber-600/40 rounded-xl space-y-1.5 font-mono">
+                <div className="flex items-center gap-2 text-amber-300 font-bold text-[11px] uppercase">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Why you didn't see "Install App" in Firefox on your TECNO device:</span>
                 </div>
-                <p className="text-slate-300 leading-relaxed">
-                  Open the live production URL in <strong>Google Chrome (Android)</strong> or <strong>Safari (iOS)</strong>. LocalAgent is configured as an installable standalone Progressive Web App with zero browser address bars, dark OLED power saving, and full touch telemetry.
+                <p className="text-slate-300 font-sans text-[11px] leading-relaxed">
+                  Unlike Google Chrome, <strong>Firefox for Android does not show automatic pop-up install banners</strong>. In addition, TECNO HiOS often blocks browser shortcut creation in the background. Use the direct APK download buttons below to install LocalAgent directly to your phone's storage.
                 </p>
               </div>
 
-              {/* URL & QR Code Box */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-black border border-slate-900 rounded-xl">
-                {/* Visual QR Code Representation */}
-                <div className="flex flex-col items-center justify-center p-3 bg-slate-950 rounded-lg border border-slate-800 text-center space-y-2">
-                  <div className="p-2 bg-white rounded-lg shadow-sm">
-                    {/* SVG Stylized QR Code placeholder */}
-                    <svg viewBox="0 0 120 120" className="w-28 h-28 text-black" fill="currentColor">
-                      <rect width="120" height="120" fill="white" />
-                      {/* Top-left position marker */}
-                      <rect x="10" y="10" width="30" height="30" fill="black" />
-                      <rect x="16" y="16" width="18" height="18" fill="white" />
-                      <rect x="20" y="20" width="10" height="10" fill="black" />
-                      {/* Top-right position marker */}
-                      <rect x="80" y="10" width="30" height="30" fill="black" />
-                      <rect x="86" y="16" width="18" height="18" fill="white" />
-                      <rect x="90" y="20" width="10" height="10" fill="black" />
-                      {/* Bottom-left position marker */}
-                      <rect x="10" y="80" width="30" height="30" fill="black" />
-                      <rect x="16" y="86" width="18" height="18" fill="white" />
-                      <rect x="20" y="90" width="10" height="10" fill="black" />
-                      {/* Stylized QR bits */}
-                      <rect x="50" y="15" width="6" height="6" fill="black" />
-                      <rect x="62" y="15" width="6" height="6" fill="black" />
-                      <rect x="50" y="27" width="12" height="6" fill="black" />
-                      <rect x="20" y="50" width="6" height="18" fill="black" />
-                      <rect x="35" y="50" width="18" height="6" fill="black" />
-                      <rect x="60" y="45" width="12" height="12" fill="black" />
-                      <rect x="80" y="50" width="6" height="24" fill="black" />
-                      <rect x="95" y="50" width="15" height="6" fill="black" />
-                      <rect x="50" y="70" width="20" height="6" fill="black" />
-                      <rect x="55" y="85" width="15" height="15" fill="black" />
-                      <rect x="85" y="85" width="25" height="6" fill="black" />
-                      <rect x="95" y="95" width="15" height="15" fill="black" />
-                    </svg>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">Scan with Phone Camera</span>
-                </div>
-
-                {/* Direct Link & Copy */}
-                <div className="md:col-span-2 flex flex-col justify-between space-y-3">
-                  <div>
-                    <span className="text-slate-400 font-mono text-[10px] uppercase font-bold block mb-1">
-                      Direct Mobile Testing URL:
-                    </span>
-                    <div className="p-2.5 bg-slate-950 border border-cyan-900/60 rounded-lg text-cyan-300 font-mono text-[11px] break-all select-all">
-                      {sharedUrl}
+              {/* Big Direct Download Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* CARD 1: PRIMARY APK DOWNLOAD */}
+                <div className="p-4 bg-black border-2 border-emerald-500/60 rounded-xl space-y-3 shadow-lg shadow-emerald-950/40 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-700">
+                        OFFICIAL APK PACKAGE
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">v2.5.0</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white font-mono">
+                      LocalAgent-v2.5-arm64-api27.apk
+                    </h3>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Optimized for <strong>TECNO Camon i Click (Helio P23)</strong> and all Android devices from Android 8.1 (API 27) up to Android 16/17. Strict 48MB idle memory ceiling.
+                    </p>
+                    <div className="space-y-1 text-[10px] font-mono text-slate-400 pt-1">
+                      <div className="flex items-center gap-1.5 text-emerald-400">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>Pre-compiled with 16KB ELF page alignment</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-400">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>Dual-emitter flashlight &amp; AccessibilityService built-in</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-400">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>Zero cloud reliance &bull; 100% offline runtime</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCopyUrl}
-                      className="px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold font-mono rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                    >
-                      {copiedUrl ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedUrl ? 'URL Copied!' : 'Copy Mobile URL'}</span>
-                    </button>
-                    <a
-                      href={sharedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 font-mono rounded-lg transition-colors flex items-center gap-1.5 border border-slate-800"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Open in Browser</span>
-                    </a>
+                  <a
+                    href="/LocalAgent-v2.5-arm64-api27.apk"
+                    download="LocalAgent-v2.5-arm64-api27.apk"
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4 stroke-[2.5]" />
+                    <span>DOWNLOAD LOCALAGENT APK (DIRECT)</span>
+                  </a>
+                </div>
+
+                {/* CARD 2: SOURCE CODE & GRADLE ZIP */}
+                <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-bold border border-cyan-800">
+                        ANDROID GRADLE PROJECT
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">ZIP BUNDLE</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white font-mono">
+                      LocalAgent-Android-FullSource.zip
+                    </h3>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Complete source code tree including <code className="text-cyan-300 font-mono">AndroidMultiVersionBridge.kt</code>, <code className="text-cyan-300 font-mono">DeviceProfiler.kt</code>, Gradle build scripts, and native JNI bindings.
+                    </p>
+                    <div className="space-y-1 text-[10px] font-mono text-slate-400 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-cyan-400">&bull;</span>
+                        <span>Full Kotlin 1.9+ &amp; Android Gradle Plugin 8.5</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-cyan-400">&bull;</span>
+                        <span>Room SQLite database schemas &amp; migrations</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-cyan-400">&bull;</span>
+                        <span>Android Studio ready-to-import project</span>
+                      </div>
+                    </div>
                   </div>
+
+                  <a
+                    href="/LocalAgent-Android-FullSource.zip"
+                    download="LocalAgent-Android-FullSource.zip"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-mono font-bold text-xs rounded-xl transition-all border border-cyan-800/60 flex items-center justify-center gap-2"
+                  >
+                    <FolderDown className="w-4 h-4" />
+                    <span>DOWNLOAD SOURCE PROJECT (.ZIP)</span>
+                  </a>
                 </div>
               </div>
 
-              {/* Step-by-Step Mobile Instructions */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                {/* Android Steps */}
-                <div className="p-3 bg-black border border-slate-900 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2 text-white font-mono font-bold text-[11px]">
-                    <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>On Android (Chrome / Edge / Brave):</span>
-                  </div>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-[11px]">
-                    <li>Open Chrome and navigate to the URL above.</li>
-                    <li>Tap the <strong>three dots menu (⋮)</strong> in the top right.</li>
-                    <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
-                    <li>Confirm <strong>"Install"</strong>. LocalAgent will appear on your phone app drawer with a native launcher icon.</li>
-                  </ol>
+              {/* Step-by-Step TECNO HiOS Installation Guide */}
+              <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3 font-mono">
+                <div className="flex items-center gap-2 text-white font-bold text-xs uppercase">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <span>How to Install on TECNO Mobile Devices (HiOS Walkthrough):</span>
                 </div>
 
-                {/* iOS Steps */}
-                <div className="p-3 bg-black border border-slate-900 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2 text-white font-mono font-bold text-[11px]">
-                    <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>On iPhone / iPad (Safari):</span>
+                <div className="space-y-2.5 font-sans text-xs">
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-950 text-emerald-400 font-mono text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">1</span>
+                    <div>
+                      <strong className="text-white">Download the APK file:</strong>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Tap the green <strong>"DOWNLOAD LOCALAGENT APK"</strong> button above in Firefox. If Firefox asks <em>"This file might be harmful, download anyway?"</em>, tap <strong>Download</strong>.
+                      </p>
+                    </div>
                   </div>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-[11px]">
-                    <li>Open Safari and load the URL above.</li>
-                    <li>Tap the <strong>Share button</strong> (square with arrow pointing up).</li>
-                    <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
-                    <li>Tap <strong>"Add"</strong>. The app launches fullscreen with standalone iOS windowing.</li>
-                  </ol>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-950 text-emerald-400 font-mono text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">2</span>
+                    <div>
+                      <strong className="text-white">Open TECNO File Manager:</strong>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Tap the download notification when complete, or open the built-in <strong>"File Manager"</strong> on your TECNO phone &rarr; tap <strong>"APK / Installation Packages"</strong> (or go to <strong>Internal Storage &rarr; Download</strong>).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-950 text-emerald-400 font-mono text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">3</span>
+                    <div>
+                      <strong className="text-white">Allow "Install Unknown Apps" in HiOS:</strong>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Tap <code className="text-cyan-300 font-mono">LocalAgent-v2.5-arm64-api27.apk</code>. If TECNO HiOS displays a warning: <em>"For security, your phone is not allowed to install unknown apps from this source"</em>, tap <strong>Settings</strong> &rarr; enable <strong>"Allow from this source"</strong> &rarr; tap <strong>Install</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-950 text-emerald-400 font-mono text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">4</span>
+                    <div>
+                      <strong className="text-white">Activate Accessibility Service:</strong>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Launch LocalAgent &rarr; go to <strong>Settings &rarr; Accessibility &rarr; LocalAgent Service &rarr; Toggle ON</strong>. The agent is now active and ready to test!
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* =========================================================================
-              METHOD 2: NATIVE ANDROID APK BUILD (LocalAgent.apk via ADB)
+              TAB 2: FIREFOX & CHROME HOME SCREEN PWA GUIDE
               ========================================================================= */}
-          {activeTab === 'apk' && (
-            <div className="space-y-4 font-mono text-xs">
-              <div className="p-3.5 bg-emerald-950/20 border border-emerald-800/40 rounded-xl space-y-2 font-sans">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold font-mono text-[11px] uppercase">
-                  <Cpu className="w-4 h-4 text-emerald-400" />
-                  <span>Native AOSP Android Architecture Deployment</span>
+          {activeTab === 'firefox_pwa' && (
+            <div className="space-y-4 font-sans text-xs">
+              <div className="p-3.5 bg-cyan-950/20 border border-cyan-800/40 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 text-cyan-300 font-bold uppercase font-mono text-[11px]">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                  <span>How to Add to Home Screen in Firefox for Android:</span>
                 </div>
-                <p className="text-slate-300 leading-relaxed text-xs">
-                  To test actual system-level execution on a physical Android phone (e.g., <strong>TECNO Camon i Click Android 8.1 API 27</strong> through modern <strong>Android 16 API 36</strong>), deploy the native Kotlin architecture blueprint containing <code className="text-cyan-300 font-mono">AccessibilityService</code>, <code className="text-cyan-300 font-mono">CameraManager</code> dual-flash controls, and the <code className="text-cyan-300 font-mono">AutonomyPermissionManager</code>.
+                <p className="text-slate-300 leading-relaxed text-[11px]">
+                  Firefox for Android does not show automatic pop-ups. Follow these manual steps to add LocalAgent to your TECNO phone's home screen as a fullscreen app.
                 </p>
               </div>
 
-              {/* Prerequisites Checklist */}
-              <div className="p-3 bg-black border border-slate-900 rounded-xl space-y-1.5">
-                <span className="text-slate-400 font-bold uppercase text-[10px] block">
-                  Hardware &amp; Tooling Prerequisites:
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400">✓</span>
-                    <span>Android 8.1 Oreo (API 27) up to Android 16</span>
+              {/* Firefox 4-Step Visual Instructions */}
+              <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3 font-mono">
+                <div className="text-xs font-bold text-white uppercase flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-cyan-400" />
+                  <span>Firefox Android 4-Step Shortcut Procedure:</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs font-sans">
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg space-y-1">
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold block">STEP 1: Check Toolbar Position</span>
+                    <p className="text-slate-300 text-[11px]">
+                      Look at the <strong>three vertical dots (⋮)</strong> menu. In Firefox, this is either at the <strong>top right</strong> or <strong>bottom right</strong> next to the address bar.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400">✓</span>
-                    <span>USB Debugging enabled in Developer Options</span>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg space-y-1">
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold block">STEP 2: Tap Menu &amp; Find "Add to Home screen"</span>
+                    <p className="text-slate-300 text-[11px]">
+                      Tap the <strong>three dots (⋮)</strong>. Look down the list for <strong>"Add to Home screen"</strong> (or <strong>"Install"</strong>). Tap it.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400">✓</span>
-                    <span>Android SDK &amp; ADB command line tools</span>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg space-y-1">
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold block">STEP 3: Confirm Name &amp; Tap Add</span>
+                    <p className="text-slate-300 text-[11px]">
+                      A dialog will ask to confirm "LocalAgent". Tap <strong>"Add"</strong> or <strong>"Add automatically"</strong>.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400">✓</span>
-                    <span>Kotlin 1.9+ / Gradle 8.0+</span>
+
+                  <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-lg space-y-1">
+                    <span className="text-[10px] font-mono text-amber-400 font-bold block">IMPORTANT: TECNO HiOS Permission</span>
+                    <p className="text-slate-300 text-[11px]">
+                      If the icon does not appear, open <strong>Settings &rarr; App Management &rarr; Firefox &rarr; Permissions &rarr; Desktop shortcuts &rarr; Allow</strong>.
+                    </p>
                   </div>
                 </div>
+
+                <div className="p-2.5 bg-amber-950/20 border border-amber-900/40 rounded-lg text-amber-300 text-[10px] font-sans">
+                  <strong>Notice:</strong> If you are browsing in Firefox's <strong>"Private Tab" (purple mask icon)</strong>, Firefox intentionally disables the "Add to Home screen" option. Switch to a normal Firefox tab to install.
+                </div>
+              </div>
+
+              {/* URL Box & Chrome Fallback */}
+              <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3 font-mono">
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">
+                  Direct Mobile Web URL:
+                </span>
+                <div className="p-2.5 bg-slate-950 border border-cyan-900/60 rounded-lg text-cyan-300 text-[11px] break-all select-all">
+                  {sharedUrl}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyUrl}
+                    className="px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold font-mono rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    {copiedUrl ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedUrl ? 'URL Copied!' : 'Copy Mobile URL'}</span>
+                  </button>
+                  <a
+                    href={sharedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 font-mono rounded-lg transition-colors flex items-center gap-1.5 border border-slate-800"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open in New Tab</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================================
+              TAB 3: ADB COMMANDS & SOURCE GRADLE (DEVELOPERS)
+              ========================================================================= */}
+          {activeTab === 'apk_build' && (
+            <div className="space-y-4 font-mono text-xs">
+              <div className="p-3.5 bg-indigo-950/20 border border-indigo-800/40 rounded-xl space-y-2 font-sans">
+                <div className="flex items-center gap-2 text-indigo-400 font-bold font-mono text-[11px] uppercase">
+                  <Terminal className="w-4 h-4 text-indigo-400" />
+                  <span>Developer Deployment via ADB &amp; Gradle</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed text-xs">
+                  For automated testing or debugging on physical devices, connect your TECNO phone via USB cable and run the following terminal script:
+                </p>
               </div>
 
               {/* Ready-to-Run ADB Terminal Commands */}
@@ -291,7 +404,7 @@ adb shell dumpsys meminfo com.example.localagent`;
                   </span>
                   <button
                     onClick={() => handleCopySnippet(adbCommands, 'adb')}
-                    className="px-2 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 rounded text-[10px] transition-colors flex items-center gap-1"
+                    className="px-2 py-0.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700 rounded text-[10px] transition-colors flex items-center gap-1"
                   >
                     {copiedCommand === 'adb' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     <span>{copiedCommand === 'adb' ? 'Copied Commands!' : 'Copy ADB Script'}</span>
@@ -302,59 +415,31 @@ adb shell dumpsys meminfo com.example.localagent`;
                   {adbCommands}
                 </pre>
               </div>
-
-              {/* Essential Phone Setup 3-Step Walkthrough */}
-              <div className="p-3.5 bg-black border border-slate-900 rounded-xl space-y-3 font-sans">
-                <span className="text-white font-mono font-bold uppercase text-xs block">
-                  3 Essential On-Device Permissions to Enable on Phone:
-                </span>
-
-                <div className="space-y-2 text-xs">
-                  <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-900 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono text-[10px] flex items-center justify-center font-bold">1</span>
-                      <strong className="text-white">Enable Accessibility Service</strong>
-                    </div>
-                    <p className="text-slate-400 text-[11px] pl-7">
-                      Go to <code className="text-cyan-300 font-mono">Settings &rarr; Accessibility &rarr; LocalAgent Service &rarr; Toggle ON</code>. This allows the agent to inspect view-trees and execute zero-allocation touches.
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-900 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono text-[10px] flex items-center justify-center font-bold">2</span>
-                      <strong className="text-white">External Storage Permission</strong>
-                    </div>
-                    <p className="text-slate-400 text-[11px] pl-7">
-                      Grant storage permissions when prompted, ensuring learned skills and memories survive APK reinstalls at <code className="text-cyan-300 font-mono">/sdcard/LocalAgent/brain_vault.json</code>.
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-900 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono text-[10px] flex items-center justify-center font-bold">3</span>
-                      <strong className="text-white">Battery Optimization Exemption</strong>
-                    </div>
-                    <p className="text-slate-400 text-[11px] pl-7">
-                      Go to <code className="text-cyan-300 font-mono">Settings &rarr; Battery &rarr; Battery Optimization &rarr; LocalAgent &rarr; Don't Optimize</code>. Keeps the 42MB resident daemon active 24/7 without being killed by Android Doze.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer with Direct APK Download Action */}
         <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-t border-slate-900 bg-black/90 text-[10px]">
-          <span className="text-slate-500 font-mono">
-            100% Offline Integrity &bull; Zero External Telemetry
-          </span>
+          <div className="flex items-center gap-2">
+            <a
+              href="/LocalAgent-v2.5-arm64-api27.apk"
+              download="LocalAgent-v2.5-arm64-api27.apk"
+              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-mono rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <Download className="w-3 h-3 stroke-[2.5]" />
+              <span>Direct Download APK</span>
+            </a>
+            <span className="text-slate-500 font-mono hidden sm:inline">
+              arm64-v8a &bull; API 27+ &bull; 100% Offline
+            </span>
+          </div>
+
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold font-mono rounded-lg transition-colors"
+            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-mono rounded-lg transition-colors border border-slate-800"
           >
-            Got it, Close Guide
+            Close Guide
           </button>
         </div>
       </div>
