@@ -151,6 +151,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     private val _durableBackupStatus = MutableStateFlow(durableStorage.getBackupStatus())
     val durableBackupStatus: StateFlow<com.example.data.storage.DurableBackupStatus> = _durableBackupStatus.asStateFlow()
 
+    val remoteAgentBridge = com.example.core.remote.RemoteAgentBridge(
+        hardwareManager = hardwareManager,
+        parser = parser
+    )
+    val remoteTelemetry: StateFlow<com.example.core.remote.RemoteControlTelemetry> = remoteAgentBridge.telemetry
+
     private val _liveConsoleEntries = MutableStateFlow<List<com.example.core.model.LiveConsoleEntry>>(emptyList())
     val liveConsoleEntries: StateFlow<List<com.example.core.model.LiveConsoleEntry>> = _liveConsoleEntries.asStateFlow()
 
@@ -181,6 +187,11 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         // Wire physical hardware Volume-Up double-click abort kill switch
         LocalAgentAccessibilityService.onKillSwitchTriggered = { reason ->
             triggerEmergencyKillSwitch(reason)
+        }
+
+        // Wire remote control bridge directive execution
+        remoteAgentBridge.onExecuteDirective = { prompt ->
+            executeTaskDirect(prompt)
         }
 
         viewModelScope.launch {
@@ -454,6 +465,48 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             engine.startTask(prompt, runAsBenchmark = runAsBenchmark)
             _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
         }
+    }
+
+    fun executeTaskDirect(prompt: String) {
+        if (prompt.isNotBlank()) {
+            _uiState.update { it.copy(taskInput = prompt) }
+            val matchingSkill = allSkills.value.firstOrNull { skillEntity ->
+                val triggers = skillEntity.triggerPhrases.split(",").map { it.trim().lowercase() }
+                val lower = prompt.trim().lowercase()
+                triggers.any { t -> t.isNotBlank() && (lower == t || lower.contains(t) || t.contains(lower)) }
+            }
+            if (matchingSkill != null && matchingSkill.commandsPayload.isNotBlank()) {
+                val decoded = taskSynthesizer.decodeCommands(matchingSkill.commandsPayload)
+                if (decoded.isNotEmpty()) {
+                    engine.startCustomTask(
+                        commands = decoded,
+                        prompt = "${matchingSkill.name}: $prompt",
+                        runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled
+                    )
+                    _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
+                    return
+                }
+            }
+
+            engine.startTask(prompt, runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled)
+            _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
+        }
+    }
+
+    fun toggleRemoteServer() {
+        if (remoteTelemetry.value.isServerRunning) {
+            remoteAgentBridge.stopServer()
+        } else {
+            remoteAgentBridge.startServer()
+        }
+    }
+
+    fun startRemoteServer(port: Int = com.example.core.remote.RemoteAgentBridge.DEFAULT_PORT, token: String = "JARVIS-SECURE-9942") {
+        remoteAgentBridge.startServer(port, token)
+    }
+
+    fun stopRemoteServer() {
+        remoteAgentBridge.stopServer()
     }
 
     fun executeSkill(skillEntity: com.example.data.local.SkillEntity) {

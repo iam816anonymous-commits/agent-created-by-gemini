@@ -133,6 +133,67 @@ class ActuatorController(private val context: Context) {
         return setTorch(!_isTorchOn.value)
     }
 
+    /**
+     * Controls flashlight torch directly by camera index (e.g., "0" for Rear Quad-LED, "1" for Front Dual-LED).
+     */
+    fun setFlashlight(cameraIndex: String, enabled: Boolean): ActuatorResult {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && cameraManager != null) {
+                cameraManager.setTorchMode(cameraIndex, enabled)
+                _isTorchOn.value = enabled
+                ActuatorResult(true, "Camera flash index '$cameraIndex' set to ${if (enabled) "ON" else "OFF"}")
+            } else {
+                _isTorchOn.value = enabled
+                ActuatorResult(true, "Camera flash index '$cameraIndex' simulated: ${if (enabled) "ON" else "OFF"}")
+            }
+        } catch (e: Exception) {
+            ActuatorResult(false, "Camera flash error on index '$cameraIndex': ${e.message}")
+        }
+    }
+
+    /**
+     * Triggers tactile haptic feedback with calibrated physical patterns.
+     * Supports: "TICK" (20ms crisp tap), "BURST" (50/50/50ms multi-pulse), "CONFIRM" (100ms tone).
+     */
+    fun triggerHaptic(patternType: String): ActuatorResult {
+        return try {
+            if (vibrator?.hasVibrator() == true) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val effect = when (patternType.uppercase()) {
+                        "TICK" -> VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+                        "BURST" -> VibrationEffect.createWaveform(longArrayOf(0, 50, 50, 50), -1)
+                        else -> VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE)
+                    }
+                    vibrator.vibrate(effect)
+                } else {
+                    @Suppress("DEPRECATION")
+                    when (patternType.uppercase()) {
+                        "TICK" -> vibrator.vibrate(20)
+                        "BURST" -> vibrator.vibrate(longArrayOf(0, 50, 50, 50), -1)
+                        else -> vibrator.vibrate(100)
+                    }
+                }
+                ActuatorResult(true, "Haptic pattern '$patternType' triggered successfully")
+            } else {
+                ActuatorResult(false, "Vibrator hardware not available on device")
+            }
+        } catch (e: Exception) {
+            ActuatorResult(false, "Haptic execution error: ${e.message}")
+        }
+    }
+
+    /**
+     * Plays universal user confirmation chime audio feedback.
+     */
+    fun playConfirmationChime(): ActuatorResult {
+        return try {
+            audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 1.0f)
+            ActuatorResult(true, "Played confirmation chime (FX_KEY_CLICK)")
+        } catch (e: Exception) {
+            ActuatorResult(false, "Audio chime failed: ${e.message}")
+        }
+    }
+
     fun playTone(toneType: Int = ToneGenerator.TONE_PROP_BEEP, durationMs: Int = 180): ActuatorResult {
         return try {
             val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)

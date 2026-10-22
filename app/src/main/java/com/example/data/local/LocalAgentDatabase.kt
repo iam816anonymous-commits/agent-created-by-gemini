@@ -13,6 +13,8 @@ import androidx.room.RoomDatabase
 import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.core.memory.MemoryStackDao
+import com.example.core.memory.MemoryStackEntity
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "task_executions")
@@ -222,9 +224,10 @@ interface LearningRecordDao {
         DiagnosticLogEntity::class,
         SynthesizedTaskEntity::class,
         SkillEntity::class,
-        LearningRecordEntity::class
+        LearningRecordEntity::class,
+        MemoryStackEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class LocalAgentDatabase : RoomDatabase() {
@@ -234,16 +237,12 @@ abstract class LocalAgentDatabase : RoomDatabase() {
     abstract fun synthesizedTaskDao(): SynthesizedTaskDao
     abstract fun skillDao(): SkillDao
     abstract fun learningRecordDao(): LearningRecordDao
+    abstract fun memoryStackDao(): MemoryStackDao
 
     companion object {
         @Volatile
         private var INSTANCE: LocalAgentDatabase? = null
 
-        /**
-         * Explicit non-destructive migration from Database v4 to v5.
-         * Adds learning_records table while strictly preserving all existing task executions,
-         * step records, diagnostic logs, synthesized tasks, and legacy skills.
-         */
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
@@ -275,6 +274,21 @@ abstract class LocalAgentDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `memory_stack` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sourcePackage` TEXT NOT NULL,
+                        `fragmentText` TEXT NOT NULL,
+                        `contextualTag` TEXT NOT NULL,
+                        `stateMetadata` TEXT NOT NULL,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getInstance(context: Context): LocalAgentDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -282,7 +296,7 @@ abstract class LocalAgentDatabase : RoomDatabase() {
                     LocalAgentDatabase::class.java,
                     "local_agent.db"
                 )
-                .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance

@@ -57,10 +57,26 @@ class AgentExecutionEngine(
     val actuatorController: com.example.core.actuator.ActuatorController = com.example.core.actuator.ActuatorController(context),
     val webResearchEngine: com.example.core.research.WebResearchEngine = com.example.core.research.WebResearchEngine(),
     val recoveryEngine: AutonomousRecoveryEngine = AutonomousRecoveryEngine(webResearchEngine),
-    val cognitiveBrain: CognitiveBrainEngine = CognitiveBrainEngine()
+    val cognitiveBrain: CognitiveBrainEngine = CognitiveBrainEngine(),
+    val memoryBudgetManager: com.example.core.memory.MemoryBudgetManager = com.example.core.memory.MemoryBudgetManager(context)
 ) {
     private val engineScope = CoroutineScope(Dispatchers.Default)
     private var executionJob: Job? = null
+
+    private fun enforcePreExecutionSafetyCheck(executionId: String) {
+        try {
+            val mem = memoryBudgetManager.measureMemory()
+            if (mem.isLowMemory || mem.heapAllocatedMb > 50.0) {
+                memoryBudgetManager.purgeTransientCaches()
+                repository.log(
+                    "WARN",
+                    "MemoryBudget",
+                    "4GB RAM Guardian: High heap (${mem.heapAllocatedMb}MB) or low available RAM (${mem.systemAvailableRamMb}MB). Proactively purged transient caches.",
+                    executionId
+                )
+            }
+        } catch (_: Exception) {}
+    }
 
     private val _state = MutableStateFlow(AgentEngineState())
     val state: StateFlow<AgentEngineState> = _state.asStateFlow()
@@ -194,6 +210,7 @@ class AgentExecutionEngine(
             }
 
             val stepStartTime = System.currentTimeMillis()
+            enforcePreExecutionSafetyCheck(executionId)
 
             // On-Device Cognitive Deliberation (Observe -> Assess -> Hypothesize -> Safety -> Action)
             val preObs = _state.value.preSnapshot ?: _state.value.latestObservation ?: captureFreshObservation()
@@ -396,7 +413,43 @@ class AgentExecutionEngine(
             is TaskCommand.ClickElement -> {
                 _state.update { it.copy(status = ExecutionStatus.RESOLVING_TARGET) }
 
-                val resolution = resolver.resolve(command.selector, preSnapshot)
+                var effectiveSnapshot = preSnapshot
+                var resolution = resolver.resolve(command.selector, effectiveSnapshot)
+
+                // Self-Healing Strategy 1: Check for Interruption/Modal Dialog (Permissions, System alerts, Popups)
+                if (resolution !is TargetResolver.ResolutionResult.Success && useLive && service != null) {
+                    val interruption = com.example.core.reflection.InterruptionDetector.assessSnapshot(effectiveSnapshot)
+                    if (interruption.isInterrupted && interruption.dismissCommand != null) {
+                        repository.log("WARN", "SelfHealing", "Detected blocking dialog: ${interruption.description}. Auto-bypassing...", null)
+                        when (val cmd = interruption.dismissCommand) {
+                            is TaskCommand.ClickElement -> {
+                                val bypassRes = resolver.resolve(cmd.selector, effectiveSnapshot)
+                                if (bypassRes is TargetResolver.ResolutionResult.Success) {
+                                    service.dispatchClick(bypassRes.match.node.bounds)
+                                    kotlinx.coroutines.delay(600L)
+                                    effectiveSnapshot = service.captureLiveSnapshot() ?: effectiveSnapshot
+                                    resolution = resolver.resolve(command.selector, effectiveSnapshot)
+                                }
+                            }
+                            else -> {
+                                service.dispatchBack()
+                                kotlinx.coroutines.delay(600L)
+                                effectiveSnapshot = service.captureLiveSnapshot() ?: effectiveSnapshot
+                                resolution = resolver.resolve(command.selector, effectiveSnapshot)
+                            }
+                        }
+                    }
+                }
+
+                // Self-Healing Strategy 2: Autonomous Viewport Exploration (Scroll Down if element off-screen)
+                if (resolution !is TargetResolver.ResolutionResult.Success && useLive && service != null) {
+                    repository.log("INFO", "SelfHealing", "Target '${command.targetLabel}' not in active viewport. Dispatching autonomous scroll exploration...", null)
+                    service.dispatchScroll(com.example.core.model.ScrollDirection.DOWN)
+                    kotlinx.coroutines.delay(700L)
+                    effectiveSnapshot = service.captureLiveSnapshot() ?: effectiveSnapshot
+                    resolution = resolver.resolve(command.selector, effectiveSnapshot)
+                }
+
                 if (resolution !is TargetResolver.ResolutionResult.Success) {
                     val reason = (resolution as? TargetResolver.ResolutionResult.Failure)?.reason ?: "Target resolution failed"
                     return StepExecutionRecord(
@@ -404,7 +457,7 @@ class AgentExecutionEngine(
                         commandSummary = command.displayName,
                         targetSelector = command.selector.toReadableDescription(),
                         dispatchedAction = null,
-                        preSnapshotId = preSnapshot?.id,
+                        preSnapshotId = effectiveSnapshot?.id,
                         postSnapshotId = null,
                         status = StepStatus.FAILURE,
                         verificationDetails = "Target resolution failed: $reason",
@@ -413,7 +466,7 @@ class AgentExecutionEngine(
                 }
 
                 val targetNode = resolution.match.node
-                dispatchedActionDesc = "Action Click dispatched to node '${targetNode.resourceId ?: targetNode.text}' at (${targetNode.bounds.centerX}, ${targetNode.bounds.centerY})"
+                dispatchedActionDesc = "Multi-tier tap dispatched to node '${targetNode.resourceId ?: targetNode.text}' at (${targetNode.bounds.centerX}, ${targetNode.bounds.centerY})"
                 _state.update { it.copy(status = ExecutionStatus.EXECUTING_ACTION) }
                 actionDispatchTime = System.currentTimeMillis()
 

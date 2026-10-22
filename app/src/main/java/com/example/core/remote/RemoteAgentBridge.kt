@@ -21,6 +21,8 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
@@ -51,9 +53,10 @@ data class RemoteControlTelemetry(
  *
  * Capabilities:
  * 1. Operates over local Wi-Fi or USB adb port-forwarding (adb forward tcp:8080 tcp:8080).
- * 2. Processes remote execution requests, returns live status and UI snapshots.
- * 3. Enforces cryptographic pairing token authentication.
- * 4. Strictly honors emergency kill-switch and resource budget (<2MB footprint).
+ * 2. Serves embedded interactive HTML5 Web Console on GET / for zero-install remote supervision.
+ * 3. Processes remote execution requests, returns live status and UI snapshots.
+ * 4. Enforces cryptographic pairing token authentication.
+ * 5. Strictly honors emergency kill-switch and resource budget (<2MB footprint).
  */
 class RemoteAgentBridge(
     private val hardwareManager: HardwareManager,
@@ -67,6 +70,12 @@ class RemoteAgentBridge(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
+
+    /**
+     * Optional execution callback invoked when a remote directive is received.
+     * Connects directly to AgentExecutionEngine / AgentViewModel.
+     */
+    var onExecuteDirective: (suspend (String) -> Unit)? = null
 
     private val _telemetry = MutableStateFlow(
         RemoteControlTelemetry(
@@ -83,11 +92,13 @@ class RemoteAgentBridge(
         scope.launch {
             try {
                 serverSocket = ServerSocket(port)
+                val resolvedIp = getLocalIpAddress()
                 _telemetry.value = _telemetry.value.copy(
                     isServerRunning = true,
                     port = port,
                     pairingToken = token,
-                    localIpAddress = getLocalIpAddress()
+                    localIpAddress = resolvedIp,
+                    lastCommandStatus = "Server listening on http://$resolvedIp:$port"
                 )
 
                 while (isRunning) {
@@ -118,7 +129,8 @@ class RemoteAgentBridge(
         serverSocket = null
         _telemetry.value = _telemetry.value.copy(
             isServerRunning = false,
-            activeConnectionsCount = 0
+            activeConnectionsCount = 0,
+            lastCommandStatus = "Server stopped"
         )
     }
 
@@ -148,8 +160,23 @@ class RemoteAgentBridge(
                     line = reader.readLine() ?: ""
                 }
 
-                // Security Check
-                if (authHeader != expectedToken) {
+                // Handle CORS preflight
+                if (requestLine.startsWith("OPTIONS")) {
+                    sendCorsPreflightResponse(writer)
+                    socket.close()
+                    return@launch
+                }
+
+                // Serve Embedded Web Dashboard on root GET
+                if (requestLine.startsWith("GET / ") || requestLine.startsWith("GET /index.html")) {
+                    sendHtmlResponse(writer, 200, buildWebConsoleHtml(expectedToken))
+                    socket.close()
+                    return@launch
+                }
+
+                // Security Check for API endpoints
+                val requiresAuth = requestLine.startsWith("POST /api/") || requestLine.startsWith("GET /api/remote/snapshot")
+                if (requiresAuth && authHeader != expectedToken) {
                     val errorJson = JSONObject().apply {
                         put("error", "Unauthorized: Invalid or missing X-Agent-Auth-Token")
                         put("code", 401)
@@ -179,6 +206,7 @@ class RemoteAgentBridge(
                     else -> JSONObject().apply {
                         put("status", "ok")
                         put("message", "LocalAgent J.A.R.V.I.S. Remote Control Bridge online")
+                        put("webConsole", "Open http://${_telemetry.value.localIpAddress}:${_telemetry.value.port}/ in browser")
                         put("endpoints", JSONArray(listOf(
                             "/api/remote/status",
                             "/api/remote/execute",
@@ -207,12 +235,13 @@ class RemoteAgentBridge(
         val root = JSONObject()
         root.put("status", "READY")
         root.put("agentName", "LocalAgent J.A.R.V.I.S.")
-        root.put("batteryLevel", 85)
-        root.put("heapAllocatedMb", 38.4)
+        root.put("batteryLevel", hardwareManager.getBatteryLevel())
+        root.put("heapAllocatedMb", (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024.0 * 1024.0))
         root.put("isAccessibilityConnected", LocalAgentAccessibilityService.isServiceConnected.value)
         root.put("lastForegroundPackage", LocalAgentAccessibilityService.lastEventPackage.value)
         root.put("killSwitchTriggeredCount", LocalAgentAccessibilityService.killSwitchTriggeredCount.value)
         root.put("flashlightActive", hardwareManager.isTorchEnabled.value)
+        root.put("totalDirectivesProcessed", _telemetry.value.totalDirectivesProcessed)
         root.put("timestampMs", System.currentTimeMillis())
         return root
     }
@@ -225,6 +254,7 @@ class RemoteAgentBridge(
         if (snapshot != null) {
             root.put("success", true)
             root.put("packageName", snapshot.packageName)
+            root.put("windowTitle", snapshot.windowTitle ?: "")
             root.put("totalNodes", snapshot.totalNodeCount)
             root.put("timestampMs", snapshot.timestampMs)
             root.put("generationId", snapshot.generationId)
@@ -263,8 +293,17 @@ class RemoteAgentBridge(
         _telemetry.value = _telemetry.value.copy(
             totalDirectivesProcessed = _telemetry.value.totalDirectivesProcessed + 1,
             lastRemoteCommand = prompt,
-            lastCommandStatus = "PARSED (${parsedCommands.size} steps)"
+            lastCommandStatus = "EXECUTING (${parsedCommands.size} steps)"
         )
+
+        // Dispatch directive to execution engine via callback
+        onExecuteDirective?.let { handler ->
+            scope.launch {
+                try {
+                    handler.invoke(prompt)
+                } catch (_: Exception) {}
+            }
+        }
 
         val commandsArray = JSONArray()
         for (cmd in parsedCommands) {
@@ -280,7 +319,7 @@ class RemoteAgentBridge(
             put("receivedPrompt", prompt)
             put("resolvedCommandsCount", parsedCommands.size)
             put("commands", commandsArray)
-            put("executionStatus", "ACCEPTED_FOR_ORCHESTRATION")
+            put("executionStatus", "DISPATCHED_TO_EXECUTION_ENGINE")
         }
     }
 
@@ -393,13 +432,256 @@ class RemoteAgentBridge(
         writer.println("Content-Length: ${body.toByteArray().size}")
         writer.println("Access-Control-Allow-Origin: *")
         writer.println("Access-Control-Allow-Headers: *")
+        writer.println("Access-Control-Allow-Methods: GET, POST, OPTIONS")
         writer.println("Connection: close")
         writer.println()
         writer.print(body)
         writer.flush()
     }
 
+    private fun sendHtmlResponse(writer: PrintWriter, statusCode: Int, html: String) {
+        writer.println("HTTP/1.1 $statusCode OK")
+        writer.println("Content-Type: text/html; charset=utf-8")
+        writer.println("Content-Length: ${html.toByteArray().size}")
+        writer.println("Connection: close")
+        writer.println()
+        writer.print(html)
+        writer.flush()
+    }
+
+    private fun sendCorsPreflightResponse(writer: PrintWriter) {
+        writer.println("HTTP/1.1 204 No Content")
+        writer.println("Access-Control-Allow-Origin: *")
+        writer.println("Access-Control-Allow-Headers: *")
+        writer.println("Access-Control-Allow-Methods: GET, POST, OPTIONS")
+        writer.println("Connection: close")
+        writer.println()
+        writer.flush()
+    }
+
     private fun getLocalIpAddress(): String {
-        return "127.0.0.1" // Default loopback / USB bridge
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                        val host = addr.hostAddress
+                        if (host != null && !host.startsWith("127.")) {
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return "127.0.0.1" // Fallback to loopback / adb forward
+    }
+
+    private fun buildWebConsoleHtml(token: String): String {
+        return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalAgent J.A.R.V.I.S. Remote Web Controller</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+  body { background: #0b0f19; color: #f1f5f9; padding: 16px; max-width: 800px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 16px; }
+  h1 { font-size: 1.25rem; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+  .badge { background: #1e293b; border: 1px solid #334155; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: #94a3b8; }
+  .badge-live { background: rgba(34, 197, 94, 0.2); border-color: #22c55e; color: #4ade80; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: #131b2e; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; }
+  .card h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px; }
+  .card .val { font-size: 1.1rem; font-weight: bold; color: #f8fafc; }
+  .panel { background: #131b2e; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { font-size: 1rem; color: #f8fafc; margin-bottom: 12px; display: flex; justify-content: space-between; }
+  .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
+  input[type="text"] { flex: 1; background: #0b0f19; border: 1px solid #334155; color: #fff; padding: 10px 12px; border-radius: 6px; font-size: 0.9rem; }
+  button { background: #0284c7; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+  button:hover { background: #0369a1; }
+  button.danger { background: #dc2626; }
+  button.danger:hover { background: #b91c1c; }
+  button.sec { background: #334155; }
+  button.sec:hover { background: #475569; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .log-box { background: #060911; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; font-size: 0.8rem; color: #38bdf8; max-height: 160px; overflow-y: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>⚡</span> LocalAgent J.A.R.V.I.S. Remote</h1>
+  <span id="connBadge" class="badge badge-live">ONLINE</span>
+</header>
+
+<div class="grid">
+  <div class="card">
+    <h3>Foreground Package</h3>
+    <div id="fgPkg" class="val">Loading...</div>
+  </div>
+  <div class="card">
+    <h3>Battery / Power</h3>
+    <div id="batteryVal" class="val">-- %</div>
+  </div>
+  <div class="card">
+    <h3>Heap Memory</h3>
+    <div id="heapVal" class="val">-- MB</div>
+  </div>
+  <div class="card">
+    <h3>Accessibility Service</h3>
+    <div id="accVal" class="val">--</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Autonomous Directive Dispatcher</h2>
+  <div class="input-group">
+    <input type="text" id="directivePrompt" placeholder="e.g. Open YouTube and search lo-fi beats, or turn on torch" value="Launch Calculator and tap 7" />
+    <button onclick="dispatchExecute()">Execute</button>
+  </div>
+  <div class="btn-row" style="margin-top: 8px;">
+    <button class="sec" onclick="setPreset('Launch Calculator and tap 7')">Calculator 7</button>
+    <button class="sec" onclick="setPreset('Turn on flashlight for 30 seconds')">Flashlight 30s</button>
+    <button class="sec" onclick="setPreset('Open Google Keep and create note')">Keep Note</button>
+    <button class="danger" onclick="dispatchAbort()">🚨 EMERGENCY HALT</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>System Navigation & Hardware Actuators</h2>
+  <div class="btn-row" style="margin-bottom: 12px;">
+    <button class="sec" onclick="dispatchNav('BACK')">⬅ Back</button>
+    <button class="sec" onclick="dispatchNav('HOME')">🏠 Home</button>
+    <button class="sec" onclick="dispatchNav('RECENTS')">📑 Recents</button>
+    <button class="sec" onclick="dispatchNav('NOTIFICATIONS')">🔔 Notifications</button>
+  </div>
+  <div class="btn-row">
+    <button class="sec" onclick="dispatchFlashlight('BACK', true)">💡 Torch Back</button>
+    <button class="sec" onclick="dispatchFlashlight('FRONT', true)">💡 Torch Front</button>
+    <button class="sec" onclick="dispatchFlashlight('BACK', false)">Torch OFF</button>
+    <button class="sec" onclick="dispatchSnapshot()">📸 UI Tree Snapshot</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Execution Telemetry & Live Feedback</h2>
+  <div id="consoleLog" class="log-box">Initialized Remote Web Controller.\nListening for tele-operations...</div>
+</div>
+
+<script>
+const TOKEN = '$token';
+
+function log(msg) {
+  const box = document.getElementById('consoleLog');
+  const ts = new Date().toLocaleTimeString();
+  box.innerText = `[${'$'}{ts}] ${'$'}{msg}\n` + box.innerText;
+}
+
+function setPreset(txt) {
+  document.getElementById('directivePrompt').value = txt;
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/remote/status');
+    const data = await res.json();
+    document.getElementById('fgPkg').innerText = data.lastForegroundPackage || 'Standby';
+    document.getElementById('batteryVal').innerText = data.batteryLevel + '%';
+    document.getElementById('heapVal').innerText = Math.round(data.heapAllocatedMb || 0) + ' MB';
+    document.getElementById('accVal').innerText = data.isAccessibilityConnected ? 'CONNECTED' : 'DISCONNECTED';
+  } catch (e) {
+    document.getElementById('connBadge').innerText = 'OFFLINE';
+    document.getElementById('connBadge').className = 'badge';
+  }
+}
+
+async function dispatchExecute() {
+  const prompt = document.getElementById('directivePrompt').value;
+  if (!prompt) return;
+  log('Dispatching directive: ' + prompt);
+  try {
+    const res = await fetch('/api/remote/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Agent-Auth-Token': TOKEN
+      },
+      body: JSON.stringify({ prompt })
+    });
+    const data = await res.json();
+    log('Result: ' + JSON.stringify(data));
+  } catch (e) {
+    log('Error dispatching: ' + e.message);
+  }
+}
+
+async function dispatchAbort() {
+  log('🚨 INITIATING EMERGENCY HALT...');
+  try {
+    const res = await fetch('/api/remote/abort', {
+      method: 'POST',
+      headers: { 'X-Agent-Auth-Token': TOKEN }
+    });
+    const data = await res.json();
+    log('Abort status: ' + data.message);
+  } catch (e) {
+    log('Abort error: ' + e.message);
+  }
+}
+
+async function dispatchNav(action) {
+  log('Navigating: ' + action);
+  try {
+    const res = await fetch('/api/remote/navigate', {
+      method: 'POST',
+      headers: { 'X-Agent-Auth-Token': TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+    log('Navigation response: ' + data.message);
+  } catch (e) {
+    log('Nav error: ' + e.message);
+  }
+}
+
+async function dispatchFlashlight(target, enable) {
+  log(`Flashlight ${'$'}{target} -> ${'$'}{enable}`);
+  try {
+    const res = await fetch('/api/remote/flashlight', {
+      method: 'POST',
+      headers: { 'X-Agent-Auth-Token': TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target, enable, durationSeconds: 30 })
+    });
+    const data = await res.json();
+    log('Flashlight result: ' + JSON.stringify(data));
+  } catch (e) {
+    log('Flashlight error: ' + e.message);
+  }
+}
+
+async function dispatchSnapshot() {
+  log('Capturing UI tree snapshot...');
+  try {
+    const res = await fetch('/api/remote/snapshot', {
+      headers: { 'X-Agent-Auth-Token': TOKEN }
+    });
+    const data = await res.json();
+    log('Snapshot: ' + JSON.stringify(data, null, 2));
+  } catch (e) {
+    log('Snapshot error: ' + e.message);
+  }
+}
+
+fetchStatus();
+setInterval(fetchStatus, 3000);
+</script>
+</body>
+</html>
+        """.trimIndent()
     }
 }
