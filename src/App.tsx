@@ -85,6 +85,7 @@ import { DayByDayEvolutionCenter } from './components/DayByDayEvolutionCenter';
 import { DualViewTreeDiffer } from './components/DualViewTreeDiffer';
 import { Mobile4GBOptimizationLab } from './components/Mobile4GBOptimizationLab';
 import { DeviceModelProfiler } from './components/DeviceModelProfiler';
+import { MobileInstallGuideModal } from './components/MobileInstallGuideModal';
 
 // ==========================================
 // DOMAIN MODELS & SCHEMAS
@@ -905,9 +906,18 @@ export function App() {
       addLine('  actuator flash ... - Direct control: "actuator flash rear on", "front on", "strobe"', 'output');
       addLine('  actuator haptic .. - Trigger haptic: "actuator haptic tick", "actuator haptic burst"', 'output');
       addLine('  copy logs          - Copy terminal scrollback buffer to clipboard', 'output');
+      addLine('  install mobile     - Open Mobile Testing & Installation Guide (PWA & Native APK)', 'highlight');
       addLine('  status             - View agent consciousness, RAM, battery, thermal, and ambient state', 'output');
       addLine('  cls / clear        - Clear the terminal scrollback buffer', 'output');
       addLine('  <directive text>   - Natural language: "open calculator and tap 7", "turn on flashlight"...', 'highlight');
+      return;
+    }
+
+    if (lower === 'install mobile' || lower === 'mobile' || lower === 'pwa' || lower === 'apk' || lower === 'install') {
+      setShowMobileInstallModal(true);
+      addLine('[MOBILE INSTALLATION GUIDE] Opened Mobile Testing & Installation Guide dialog.', 'pass');
+      addLine('  ├─ Method 1: Instant Mobile PWA (0 setup) -> Open Shared URL in Mobile Chrome/Safari & Add to Home Screen', 'output');
+      addLine('  └─ Method 2: Native Android APK -> ./gradlew assembleDebug && adb install -r -g app-debug.apk', 'output');
       return;
     }
 
@@ -2042,6 +2052,7 @@ export function App() {
   // User Task Input & Stepper State
   const [userPrompt, setUserPrompt] = useState('Turn on flashlight for 1 minute');
   const [pendingPlanModal, setPendingPlanModal] = useState(false);
+  const [showMobileInstallModal, setShowMobileInstallModal] = useState(false);
   const [proposedPlan, setProposedPlan] = useState<StepPlan[]>([]);
   const [targetPackageForPlan, setTargetPackageForPlan] = useState('com.android.hardware.flashlight');
   const [targetLabelForPlan, setTargetLabelForPlan] = useState('Flashlight');
@@ -3339,6 +3350,16 @@ export function App() {
 
           {/* Quick Controls: OLED Eco Mode + Kill Switch */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Mobile Installation & Testing Guide Button */}
+            <button
+              onClick={() => setShowMobileInstallModal(true)}
+              title="Install & Test on Mobile Phone (PWA & Native APK)"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1.5 border bg-cyan-500 hover:bg-cyan-400 text-black font-bold shadow-sm"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">INSTALL ON MOBILE</span>
+            </button>
+
             {/* 23-Phase Governance Architecture Roadmap Modal Button */}
             <button
               onClick={() => setShowRoadmapModal(true)}
@@ -6177,6 +6198,15 @@ ws           ::= [ \\t\\n\\r]*`}
           </div>
         </div>
       )}
+
+      {/* =========================================================================
+          MOBILE INSTALLATION & TESTING GUIDE MODAL
+          ========================================================================= */}
+      <MobileInstallGuideModal
+        isOpen={showMobileInstallModal}
+        onClose={() => setShowMobileInstallModal(false)}
+        sharedUrl="https://ais-pre-6xgz3lwcexgvao4wdsiao7-313693707238.asia-east1.run.app"
+      />
 
       {/* Floating Copied Code / Logs Feedback Toast */}
       {copiedCodeToast && (
