@@ -93,48 +93,57 @@ adb shell dumpsys meminfo com.example.localagent`;
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-900 bg-black/50 px-4 pt-2 gap-2 text-xs overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-slate-900 bg-black/50 px-4 pt-1 gap-2 text-xs overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('direct')}
-            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+            className={`min-h-[44px] pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'direct'
                 ? 'text-emerald-400 border-emerald-400'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Direct APK Download (Recommended for TECNO &amp; Firefox)</span>
+            <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>
+              <span className="sm:hidden">Direct APK</span>
+              <span className="hidden sm:inline">Direct APK Download (Recommended for TECNO &amp; Firefox)</span>
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('firefox_pwa')}
-            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+            className={`min-h-[44px] pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'firefox_pwa'
                 ? 'text-cyan-400 border-cyan-400'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Firefox &amp; Browser Home Screen Guide</span>
+            <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span>
+              <span className="sm:hidden">Firefox &amp; PWA</span>
+              <span className="hidden sm:inline">Firefox &amp; Browser Home Screen Guide</span>
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('apk_build')}
-            className={`pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
+            className={`min-h-[44px] pb-2.5 px-3 flex items-center gap-2 font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'apk_build'
                 ? 'text-indigo-400 border-indigo-400'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
-            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-            <span>ADB &amp; Source Code</span>
+            <Terminal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>
+              <span className="sm:hidden">ADB &amp; Code</span>
+              <span className="hidden sm:inline">ADB &amp; Source Code</span>
+            </span>
           </button>
         </div>
 

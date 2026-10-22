@@ -712,20 +712,20 @@ export const AutonomousPatternStudio: React.FC<AutonomousPatternStudioProps> = (
         </div>
 
         {/* Studio Mode Segmented Switch & Save Button */}
-        <div className="flex items-center gap-2">
-          <div className="flex p-0.5 rounded-lg bg-black border border-slate-800 font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex p-1 rounded-xl bg-black border border-slate-800 font-mono text-xs w-full xs:w-auto">
             <button
               onClick={() => {
                 handleStopSong();
                 setStudioMode('MUSIC_SYNC');
               }}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
+              className={`flex-1 xs:flex-none min-h-[44px] px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 studioMode === 'MUSIC_SYNC'
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold shadow-xs'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-white active:bg-slate-900'
               }`}
             >
-              <Music className="w-3.5 h-3.5" />
+              <Music className="w-4 h-4 shrink-0" />
               <span>Music &amp; Song Sync</span>
             </button>
             <button
@@ -733,22 +733,22 @@ export const AutonomousPatternStudio: React.FC<AutonomousPatternStudioProps> = (
                 handleStopSong();
                 setStudioMode('PATTERN_STUDIO');
               }}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
+              className={`flex-1 xs:flex-none min-h-[44px] px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 studioMode === 'PATTERN_STUDIO'
                   ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-black font-bold shadow-xs'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-white active:bg-slate-900'
               }`}
             >
-              <TrendingUp className="w-3.5 h-3.5" />
+              <TrendingUp className="w-4 h-4 shrink-0" />
               <span>Pattern Improviser</span>
             </button>
           </div>
 
           <button
             onClick={handleSaveVault}
-            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors"
+            className="w-full xs:w-auto min-h-[44px] px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 active:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-mono flex items-center justify-center gap-1.5 transition-colors"
           >
-            <Save className="w-3.5 h-3.5" />
+            <Save className="w-4 h-4 shrink-0" />
             <span>Persist to Vault</span>
           </button>
         </div>

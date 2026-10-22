@@ -755,32 +755,54 @@ export function Mobile4GBOptimizationLab({ oledMode = false }: { oledMode?: bool
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 text-xs font-mono self-start sm:self-auto overflow-x-auto no-scrollbar max-w-full">
-          {[
-            { id: 'matrix', label: '8-Feature Matrix', icon: Layers },
-            { id: 'version_matrix', label: 'API 27 → 36 Matrix', icon: Smartphone },
-            { id: 'memory_sim', label: 'RAM & LMK Watchdog', icon: Gauge },
-            { id: 'gbnf_lab', label: 'GBNF Action Lab', icon: Code2 },
-            { id: 'corepilot', label: 'Helio CorePilot', icon: Thermometer },
-            { id: 'formulas', label: 'Math & Formulas', icon: Activity },
-            { id: 'benchmarks', label: 'Research Baseline', icon: CheckCircle2 }
-          ].map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 text-[11px] whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-indigo-500 text-black font-bold shadow-sm shadow-indigo-500/20'
-                    : 'bg-black text-slate-400 hover:text-white border border-slate-900'
-                }`}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        <div className="w-full sm:w-auto">
+          {/* Mobile dropdown for instant tab selection */}
+          <div className="block sm:hidden mb-1">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as any)}
+              className="w-full min-h-[44px] bg-black border border-indigo-800 text-indigo-300 font-mono text-xs font-bold rounded-xl px-3 py-2 focus:outline-none"
+            >
+              <option value="matrix">1. 8-Feature Optimization Matrix (99.7% RAM drop)</option>
+              <option value="version_matrix">2. Android Multi-Version Matrix (API 27 → 36)</option>
+              <option value="memory_sim">3. 4GB RAM &amp; LMK Pressure Watchdog</option>
+              <option value="gbnf_lab">4. GBNF Constrained Action Grammars</option>
+              <option value="corepilot">5. MediaTek Helio P23 CorePilot Scheduler</option>
+              <option value="formulas">6. Analytical Resource Equations &amp; Proofs</option>
+              <option value="benchmarks">7. Academic Research Baselines (AutoDroid/Octopus)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs font-mono overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'matrix', label: '8-Features', fullLabel: '8-Feature Matrix', icon: Layers },
+              { id: 'version_matrix', label: 'API 27→36', fullLabel: 'API 27 → 36 Matrix', icon: Smartphone },
+              { id: 'memory_sim', label: 'RAM Sim', fullLabel: 'RAM & LMK Watchdog', icon: Gauge },
+              { id: 'gbnf_lab', label: 'GBNF Lab', fullLabel: 'GBNF Action Lab', icon: Code2 },
+              { id: 'corepilot', label: 'CorePilot', fullLabel: 'Helio CorePilot', icon: Thermometer },
+              { id: 'formulas', label: 'Formulas', fullLabel: 'Math & Formulas', icon: Activity },
+              { id: 'benchmarks', label: 'Research', fullLabel: 'Research Baseline', icon: CheckCircle2 }
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs whitespace-nowrap border ${
+                    activeTab === tab.id
+                      ? 'bg-indigo-500 text-black font-bold border-indigo-400 shadow-sm shadow-indigo-500/20'
+                      : 'bg-black text-slate-400 hover:text-white border-slate-900 active:bg-slate-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    <span className="sm:hidden">{tab.label}</span>
+                    <span className="hidden sm:inline">{tab.fullLabel}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

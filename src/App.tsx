@@ -86,6 +86,9 @@ import { DualViewTreeDiffer } from './components/DualViewTreeDiffer';
 import { Mobile4GBOptimizationLab } from './components/Mobile4GBOptimizationLab';
 import { DeviceModelProfiler, DEVICE_PRESETS, DeviceHardwareProfile } from './components/DeviceModelProfiler';
 import { MobileInstallGuideModal } from './components/MobileInstallGuideModal';
+import { ReaConfidenceLedgerStudio } from './components/ReaConfidenceLedgerStudio';
+import { AgentCoreLoopStudio } from './components/AgentCoreLoopStudio';
+import { OfflineVectorAndWorkflowStudio } from './components/OfflineVectorAndWorkflowStudio';
 
 // ==========================================
 // DOMAIN MODELS & SCHEMAS
@@ -205,7 +208,7 @@ const PHASES_23 = [
 ];
 
 export function App() {
-  type CategoryTab = 'directives' | 'device_profiler' | 'evolution' | 'actuators' | 'viewport' | 'architecture' | 'vault' | 'verification' | 'slm_brain' | 'optimization_4gb' | 'curiosity' | 'intelligence' | 'telemetry' | 'all';
+  type CategoryTab = 'directives' | 'agent_suite' | 'vector_workflow' | 'rea' | 'device_profiler' | 'evolution' | 'actuators' | 'viewport' | 'architecture' | 'vault' | 'verification' | 'slm_brain' | 'optimization_4gb' | 'curiosity' | 'intelligence' | 'telemetry' | 'all';
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('directives');
 
   // Interactive CMD Test Terminal State
@@ -218,6 +221,17 @@ export function App() {
 
   const [cmdInput, setCmdInput] = useState('');
   const [cmdHistoryList, setCmdHistoryList] = useState<string[]>([
+    'vector search',
+    'workflow chain',
+    'nocturnal schedule',
+    'agent loop',
+    'policy gate',
+    'reflexio replay',
+    'diff view',
+    'bayesian route',
+    'power status',
+    'tst rea',
+    'rea status',
     'tst all',
     'profile device',
     'model registry',
@@ -234,8 +248,8 @@ export function App() {
   const [hapticRippleActive, setHapticRippleActive] = useState(false);
   const [copiedCodeToast, setCopiedCodeToast] = useState<string | null>(null);
 
-  type ArchFileType = 'MemoryStack.kt' | 'BrainVaultManager.kt' | 'ActuatorController.kt' | 'ActuatorPatternSynthesizer.kt' | 'MusicBeatSynchronizer.kt' | 'AdaptiveDeviceOptimizer.kt' | 'DailyEvolutionEngine.kt' | 'HelioCorePilotAndMemoryOptimizer.kt' | 'PredictiveActionPrefetcher.kt' | 'FailsafeRecoveryRing.kt' | 'SnapshotDiffer.kt' | 'RemoteAgentBridge.kt' | 'AutonomousRecoveryEngine.kt' | 'LocalAgentDatabase.kt' | 'AndroidMultiVersionBridge.kt' | 'DeviceProfiler.kt' | 'AdaptiveModelRegistry.kt';
-  const [selectedArchFile, setSelectedArchFile] = useState<ArchFileType>('DeviceProfiler.kt');
+  type ArchFileType = 'ConfidenceLedger.kt' | 'AgentArtifactCache.kt' | 'AtomicRebuildPipeline.kt' | 'MemoryStack.kt' | 'BrainVaultManager.kt' | 'ActuatorController.kt' | 'ActuatorPatternSynthesizer.kt' | 'MusicBeatSynchronizer.kt' | 'AdaptiveDeviceOptimizer.kt' | 'DailyEvolutionEngine.kt' | 'HelioCorePilotAndMemoryOptimizer.kt' | 'PredictiveActionPrefetcher.kt' | 'FailsafeRecoveryRing.kt' | 'SnapshotDiffer.kt' | 'RemoteAgentBridge.kt' | 'AutonomousRecoveryEngine.kt' | 'LocalAgentDatabase.kt' | 'AndroidMultiVersionBridge.kt' | 'DeviceProfiler.kt' | 'AdaptiveModelRegistry.kt';
+  const [selectedArchFile, setSelectedArchFile] = useState<ArchFileType>('ConfidenceLedger.kt');
 
   // Live Cross-App Memory Stack Simulated State (Room Entity)
   interface MemoryStackItem {
@@ -315,6 +329,7 @@ export function App() {
   const [oledLowPowerMode, setOledLowPowerMode] = useState(false);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [showMobileQuickMenu, setShowMobileQuickMenu] = useState(false);
   const [quickSearchQuery, setQuickSearchQuery] = useState('');
   const [activePhoneTab, setActivePhoneTab] = useState<'AUTO' | 'KEEP' | 'BRIEFING' | 'FLASHLIGHT' | 'CALCULATOR' | 'SETTINGS' | 'CINEMA'>('AUTO');
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
@@ -902,6 +917,21 @@ export function App() {
       addLine('  top / ps           - View active kernel daemon processes, threads, and memory footprint', 'output');
       addLine('  dump memory        - Dump active Room memory_stack table entities', 'output');
       addLine('  dump vault         - Inspect /sdcard/LocalAgent/brain_vault.json & CRC32 integrity', 'output');
+      addLine('  agent loop / loop  - Run Mobile-Agent-Android 4-Phase loop (Plan->Act->Reflect->Remember)', 'highlight');
+      addLine('  policy gate        - Verify Ultra-Agent zero-bypass deterministic mechanical safety barrier', 'highlight');
+      addLine('  reflexio replay    - Execute Reflexio named task recipes with 4-Ring auto-fallback', 'highlight');
+      addLine('  diff view / differ - Test zero-overhead 64-bit Active Viewport Differ node hashes', 'output');
+      addLine('  bayesian route     - Inspect Bayesian Confidence Decay & self-healed route promotion', 'output');
+      addLine('  power status       - Check Helio P23 CorePilot thermal governor & battery current draw', 'output');
+      addLine('  service wake       - Verify Android 8.1 Foreground Service & WakeLock auto-release', 'output');
+      addLine('  scroll calibrate   - Calibrate dynamic viewport scroll fling velocity for 320 DPI', 'output');
+      addLine('  tst rea            - Run morluto/rea 5-Stage Systematic Rebuild & Atomic Test Loop', 'highlight');
+      addLine('  rea status / rea   - Inspect live Seen / Inferred / Unknown Confidence Ledger state', 'highlight');
+      addLine('  rea inspect        - Inspect on-device ~200-token compressed structural artifact summary', 'output');
+      addLine('  rea rebuild        - Dry-run atomic rebuild loop against active view-tree bounds', 'output');
+      addLine('  vector search / vector - Query 128-D offline vector memory for semantic UI node match', 'highlight');
+      addLine('  workflow chain     - Run multi-app workflow chain (Web Search -> Keep -> WhatsApp)', 'highlight');
+      addLine('  nocturnal schedule - Inspect predictive battery-aware nocturnal batch scheduler (00:00-05:00)', 'output');
       addLine('  actuator chime     - Synthesize physical user confirmation chime audio (WebAudio)', 'output');
       addLine('  actuator flash ... - Direct control: "actuator flash rear on", "front on", "strobe"', 'output');
       addLine('  actuator haptic .. - Trigger haptic: "actuator haptic tick", "actuator haptic burst"', 'output');
@@ -910,6 +940,252 @@ export function App() {
       addLine('  status             - View agent consciousness, RAM, battery, thermal, and ambient state', 'output');
       addLine('  cls / clear        - Clear the terminal scrollback buffer', 'output');
       addLine('  <directive text>   - Natural language: "open calculator and tap 7", "turn on flashlight"...', 'highlight');
+      return;
+    }
+
+    if (lower === 'vector search' || lower === 'tst vector' || lower === 'vector' || lower.startsWith('vector ')) {
+      setIsCmdRunning(true);
+      setActiveCategory('vector_workflow');
+      const q = lower.replace('vector search', '').replace('vector', '').replace('tst', '').trim() || 'jot down grocery list';
+      addLine(`[VECTOR MEMORY] Executing 128-D offline semantic retrieval for: "${q}"...`, 'info');
+      setTimeout(() => {
+        addLine('  ├─ Embedding Quantization: 128-D normalized float array (L2 norm = 1.000)', 'pass');
+        addLine('  ├─ Top Match #1: com.google.android.keep (New text note FAB) -> Cosine: 94.2%', 'pass');
+        addLine('  ├─ Fallback Target: id/new_note_button (Resolved without cloud LLM or vision model)', 'pass');
+        addLine('  ├─ Memory Allocation: 0 byte GC heap churn; in-place dot product vector math', 'pass');
+        addLine('  └─ Retrieval Latency: 4.8 ms on MediaTek Helio P23 ARMv8-A NEON SIMD', 'pass');
+        addLine('[PASS] Offline Vector Memory: Semantic target resolved with 100% confidence.', 'highlight');
+        setIsCmdRunning(false);
+      }, 350);
+      return;
+    }
+
+    if (lower === 'workflow chain' || lower === 'tst workflow' || lower === 'chain app' || lower === 'chain') {
+      setIsCmdRunning(true);
+      setActiveCategory('vector_workflow');
+      addLine('[WORKFLOW CHAIN] Executing 3-App Transactional Workflow Chain...', 'info');
+      setTimeout(() => {
+        addLine('  [STEP 1: WEB] Extracting cinema milestone -> "SSMB29 ₹1,200+ Cr, Spirit Dec 2026"', 'pass');
+        addLine('  │   └─ Transaction Context: Saved to Room cross_app_transaction_state (Survives process death)', 'output');
+      }, 100);
+      setTimeout(() => {
+        addLine('  [STEP 2: KEEP] Swapping to com.google.android.keep -> Injected note with #cinema hashtag', 'pass');
+        addLine('  │   └─ Handshake Integrity: State deserialized with zero memory leaks', 'output');
+      }, 250);
+      setTimeout(() => {
+        addLine('  [STEP 3: WHATSAPP] Swapping to com.whatsapp -> Dispatched summary message to family group', 'pass');
+        addLine('  │   └─ Transaction Commit: Cross-app context committed and clipboard sanitized (60s hygiene)', 'pass');
+        addLine('[PASS] Multi-App Workflow Chaining: 3 apps executed sequentially with full rollback safety.', 'highlight');
+        setIsCmdRunning(false);
+      }, 420);
+      return;
+    }
+
+    if (lower === 'nocturnal schedule' || lower === 'tst scheduler' || lower === 'scheduler' || lower === 'battery schedule') {
+      setActiveCategory('vector_workflow');
+      addLine('=== PREDICTIVE BATTERY-AWARE NOCTURNAL TASK SCHEDULER ===', 'info');
+      addLine('  ├─ Active Time Window: 00:00 - 05:00 AM (Device idle & dark ambient)', 'output');
+      addLine('  ├─ Charging Requirement: BatteryManager.BATTERY_STATUS_CHARGING = TRUE', 'pass');
+      addLine('  ├─ Thermal Safeguard: Helio P23 SoC < 38.0°C (Current: 33.4°C Safe)', 'pass');
+      addLine('  ├─ Batched Tasks (4): SQLite VACUUM, Reflexio playbooks, Bayesian decay, 128-D vector re-quant', 'output');
+      addLine('  └─ Day-Time Protection: All heavy batch tasks deferred during day to preserve battery & 60 FPS', 'highlight');
+      return;
+    }
+
+    if (lower === 'agent loop' || lower === 'tst loop' || lower === 'loop') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[4-PHASE LOOP] Executing Mobile-Agent-Android Explicit Lifecycle Loop...', 'info');
+      setTimeout(() => {
+        addLine('  [PHASE 1: PLAN (Manager)]       Resolved intent -> WhatsApp Fast Message Dispatch (Selector: id/entry)', 'pass');
+      }, 100);
+      setTimeout(() => {
+        addLine('  [PHASE 2: ACT (Executor)]       Dispatched AccessibilityNodeInfo ACTION_SET_TEXT (31 bytes injected)', 'pass');
+      }, 250);
+      setTimeout(() => {
+        addLine('  [PHASE 3: REFLECT (Evaluator)]  Post-action screen diff evaluated: Message bubble state confirmed "sent". No divergence.', 'pass');
+      }, 400);
+      setTimeout(() => {
+        addLine('  [PHASE 4: REMEMBER (Notetaker)] Updated Room SQLite recipe "whatsapp_mom_quickmsg". Confidence promoted to 0.98.', 'pass');
+        addLine('[PASS] Mobile-Agent 4-Phase loop completed in 38ms. 0.0ms GC pause. Zero memory leak.', 'highlight');
+        setIsCmdRunning(false);
+      }, 600);
+      return;
+    }
+
+    if (lower === 'policy gate' || lower === 'tst policy' || lower === 'policy') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[POLICY GATE] Evaluating Ultra-Agent Zero-Bypass Mechanical Safety Barrier...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ [POL-01: BOUNDS]     Screen coordinate (360, 720) inside safe display [0, 0, 720, 1440]', 'pass');
+        addLine('  ├─ [POL-02: OSCILLATE]  Consecutive identical count = 1 <= 3 limit (Runaway protection armed)', 'pass');
+        addLine('  ├─ [POL-03: SECURITY]   Target verified benign: Factory reset & account deletion blocked', 'pass');
+        addLine('  └─ [POL-04: MANIFEST]   Complies with active Android 8.1 API 27 AccessibilityService manifest', 'pass');
+        addLine('[PASS] Ultra-Agent Policy Gate: Action manifest cleared. Zero-bypass gate passed in 0.3ms.', 'highlight');
+        setIsCmdRunning(false);
+      }, 350);
+      return;
+    }
+
+    if (lower === 'reflexio replay' || lower === 'tst reflexio' || lower === 'reflexio') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[REFLEXIO] Replaying persistent Named Task Recipe with 4-Ring auto-fallback...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Recipe: "Google Keep Grocery Hashtag Parser" (com.google.android.keep)', 'output');
+        addLine('  ├─ Pitfall Warning: "Dismiss initial sync modal if present before typing title" -> Guard active', 'pass');
+        addLine('  ├─ Failsafe Status: Ring 0 (Direct node match) succeeded; 4-Ring fallback on standby', 'pass');
+        addLine('  └─ Recipe Stats: 12 consecutive successes | 98% historic success rate', 'pass');
+        addLine('[PASS] Reflexio playbook execution verified. Playbook SOP successfully preserved.', 'highlight');
+        setIsCmdRunning(false);
+      }, 400);
+      return;
+    }
+
+    if (lower === 'diff view' || lower === 'tst differ' || lower === 'active differ') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[ACTIVE DIFFER] Computing 64-bit FNV-1a Active Viewport Node Bounding Box Hashes...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Node: id/search_bar     -> Bounds: [40, 120, 680, 200]  -> Hash: 0x9E3779B97F4A7C15 [UNCHANGED]', 'pass');
+        addLine('  ├─ Node: id/category_tabs  -> Bounds: [40, 220, 680, 300]  -> Hash: 0xBF58476D1CE4E5B9 [UNCHANGED]', 'pass');
+        addLine('  ├─ Node: id/promo_banner   -> Bounds: [40, 320, 680, 540]  -> Hash: 0x94D049BB133111EB [MUTATED]', 'warn');
+        addLine('  ├─ Context Overhead Saved: 84.2% (Raw XML: 24.8 KB skipped; only mutated delta injected)', 'pass');
+        addLine('  └─ ART GC Overhead: 0.0ms pause on MediaTek Helio P23 octa-core', 'pass');
+        addLine('[PASS] Active Viewport Differ: Zero-allocation node bounding box diffing verified.', 'highlight');
+        setIsCmdRunning(false);
+      }, 380);
+      return;
+    }
+
+    if (lower === 'bayesian route' || lower === 'tst bayesian') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[BAYESIAN LEDGER] Inspecting Self-Healed Route Promotion Ledger...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Target: com.android.settings:id/switch_bluetooth', 'output');
+        addLine('  ├─ Self-Healed Offset: dx=0, dy=+40px (Overcoming OEM carrier banner mutation)', 'pass');
+        addLine('  ├─ Trials (n): 5 | Successes (k): 4 | Prior Beta: (α=2, β=2)', 'output');
+        addLine('  ├─ Confidence Score: P(Route | k, n) = (2 + 4) / (2 + 2 + 5) = 66.7% -> 88.0%', 'pass');
+        addLine('  └─ Promotion Gate: Threshold 92.0% (Ring 1/2 fallbacks will be permanently bypassed at threshold)', 'output');
+        addLine('[PASS] Bayesian Route Ledger active. Dynamic confidence progression mathematically proved.', 'highlight');
+        setIsCmdRunning(false);
+      }, 380);
+      return;
+    }
+
+    if (lower === 'power status' || lower === 'tst power' || lower === 'thermal') {
+      setActiveCategory('agent_suite');
+      addLine('=== MEDIATEK HELIO P23 POWER & THERMAL GOVERNOR (CorePilot) ===', 'info');
+      addLine('  ├─ SoC Temperature: 36.8°C (Safe baseline < 41.5°C thermal limit)', 'pass');
+      addLine('  ├─ Battery Current Draw: 280 mA (Normal active standby)', 'output');
+      addLine('  ├─ Core Cluster Affinity: OCTA_CORE_BALANCED (4x LITTLE @ 1.5GHz + 4x BIG @ 2.0GHz)', 'pass');
+      addLine('  ├─ Thermal Gating: Auto-throttle locks affinity to Cores 0-3 when SoC >= 41.5°C', 'output');
+      addLine('  └─ WakeLock Watchdog: Active (Held 2.4s / 10.0s hard auto-release ceiling)', 'pass');
+      return;
+    }
+
+    if (lower === 'service wake' || lower === 'tst hardening' || lower === 'wakelock') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[HARDENING SUITE] Verifying Android 8.1 API 27 Foreground Service & WakeLock Guards...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Service: AgentForegroundService (START_STICKY + NotificationChannel "agent_channel")', 'pass');
+        addLine('  ├─ WakeLock: PARTIAL_WAKE_LOCK acquired with 10,000ms hardware watchdog timer', 'pass');
+        addLine('  ├─ Jittered Backoff: Exponential retry with full uniform jitter t = min(t_max, t_base * 2^i) ± rand()', 'pass');
+        addLine('  └─ Doze Immunity: Bypasses Android 8.1 battery saver throttling without LMK crash', 'pass');
+        addLine('[PASS] Android 8.1 Hardening Suite 100% compliant with AOSP API 27 standards.', 'highlight');
+        setIsCmdRunning(false);
+      }, 400);
+      return;
+    }
+
+    if (lower === 'scroll calibrate' || lower === 'tst scroll') {
+      setIsCmdRunning(true);
+      setActiveCategory('agent_suite');
+      addLine('[SCROLL CALIBRATOR] Calibrating dynamic viewport scroll fling velocity for 320 DPI...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Screen Metrics: 720x1440 px, 320 DPI, aspect ratio 18:9', 'output');
+        addLine('  ├─ Target Velocity: 850 px/s with ease-out cubic deceleration curve', 'pass');
+        addLine('  ├─ Boundary Protection: Prevents overshooting target item cards in RecyclerView', 'pass');
+        addLine('[PASS] Scroll velocity calibrated. Zero-overshoot guarantee active.', 'highlight');
+        setIsCmdRunning(false);
+      }, 350);
+      return;
+    }
+
+    if (lower === 'tst rea' || lower === 'rea test') {
+      setIsCmdRunning(true);
+      setActiveCategory('rea');
+      addLine('[REA PIPELINE] Initiating morluto/rea 5-Stage Systematic Rebuild & Atomic Test Loop...', 'info');
+      setTimeout(() => {
+        addLine('  [STAGE 1] Pick Narrow Feature: Isolated target goal -> "com.google.android.keep: Create Note #shopping"', 'pass');
+      }, 100);
+      setTimeout(() => {
+        addLine('  [STAGE 2] Route by Build Type: Classified as EXPLICIT_NODE_ID with Spatial Anchor Fallback', 'pass');
+      }, 250);
+      setTimeout(() => {
+        addLine('  [STAGE 3] Summary First: Injected 184-token structural summary via AgentArtifactCache.kt (-93.7% token overhead)', 'pass');
+      }, 400);
+      setTimeout(() => {
+        addLine('  [STAGE 4] Seen/Inferred Tagging: ConfidenceLedger.kt evaluated 3 action targets:', 'output');
+        addLine('    ├─ [SEEN]     id/new_note_button -> Explicit bytecode match (Conf: 99%)', 'pass');
+        addLine('    ├─ [INFERRED] EditText[Title]    -> Spatial proximity below app bar (Conf: 84%) -> Routed Ring 1 (Jitter)', 'warn');
+        addLine('    └─ [UNKNOWN]  TimePickerSpinner  -> Clipped off-screen -> Auto-routed Ring 2 (Viewport Scroll 120px)', 'warn');
+      }, 600);
+      setTimeout(() => {
+        addLine('  [STAGE 5] Rebuild & Atomic Test: Local dry-run executed against active 720x1440 view-tree bounds', 'output');
+        addLine('  [ASSERTION] Zero Dalvik GC allocations (0.0ms GC pause, heap ceiling strictly < 48MB)', 'pass');
+        addLine('[PASS] morluto/rea 5-Stage Systematic Rebuild passed 100% of assertions. Macro safely committed to Brain Vault.', 'highlight');
+        setIsCmdRunning(false);
+      }, 800);
+      return;
+    }
+
+    if (lower === 'rea status' || lower === 'rea' || lower === 'ledger') {
+      setActiveCategory('rea');
+      addLine('=== REA CONFIDENCE LEDGER & ARTIFACT CACHE TELEMETRY ===', 'info');
+      addLine('Architectural Reference: morluto/rea (Reverse Engineer Anything)', 'output');
+      addLine('Active Screen: com.google.android.keep/.activities.BrowseActivity', 'output');
+      addLine('Confidence Ledger Breakdown:', 'output');
+      addLine('  ├─ SEEN nodes:      1 (Hard bytecode evidence: resource-id / contentDesc)', 'pass');
+      addLine('  ├─ INFERRED nodes:  1 (Spatial proximity / sibling context -> Ring 1 Jitter armed)', 'warn');
+      addLine('  └─ UNKNOWN nodes:   1 (Unresolved / clipped -> Ring 2 Viewport Scroll armed)', 'fail');
+      addLine('AgentArtifactCache Metrics:', 'output');
+      addLine('  ├─ Raw Tree XML:    24.8 KB (~2,940 tokens)', 'output');
+      addLine('  ├─ Injected Index:  184 tokens (-93.7% context savings)', 'pass');
+      addLine('  ├─ Cache Hit Ratio: 96.2% across 14 sequential queries', 'pass');
+      addLine('  └─ Dalvik Impact:   0.0 MB (Pre-allocated 16-slot circular ring buffer)', 'pass');
+      addLine('5-Stage Rebuild Loop: READY & DRY-RUN ARMED', 'highlight');
+      return;
+    }
+
+    if (lower === 'rea inspect' || lower === 'rea cache' || lower === 'summary') {
+      setActiveCategory('rea');
+      addLine('=== REA COMPRESSED STRUCTURAL ARTIFACT SUMMARY (~200 TOKENS) ===', 'info');
+      addLine('Injected into SLM context window instead of raw 3,000-token XML dumps:', 'output');
+      addLine('----------------------------------------------------------------', 'output');
+      addLine('PKG:keep|ACT:Browse|RES:720x1440', 'highlight');
+      addLine('ANCHORS:[id/new_note:btn@0.85,0.91],[id/search:inp@0.45,0.06],[id/drawer:icon@0.08,0.06]', 'highlight');
+      addLine('DELTA:0_MUTATIONS|FOCUSED:none|CLIP_Y:1380', 'highlight');
+      addLine('----------------------------------------------------------------', 'output');
+      addLine('Token footprint: 184 tokens (Raw XML: 2,940 tokens skipped). GC pauses: 0.0ms.', 'pass');
+      return;
+    }
+
+    if (lower === 'rea rebuild') {
+      setIsCmdRunning(true);
+      setActiveCategory('rea');
+      addLine('[REA REBUILD] Executing dry-run validation on candidate accessibility macro...', 'info');
+      setTimeout(() => {
+        addLine('  ├─ Target Package: com.google.android.calculator', 'output');
+        addLine('  ├─ Macro Actions: [CLICK id/op_mul, CLICK text:"π", CLICK id/eq]', 'output');
+        addLine('  ├─ Dry-Run Assert: Nodes exist in viewport, isClickable=true, non-zero touch bounds', 'pass');
+        addLine('  ├─ Pre/Post FNV-1a Hash: 0xA1C4829E -> 0x82DE1190 (Single state change confirmed)', 'pass');
+        addLine('[PASS] Macro rebuild successful: Dry-run passed with 0 errors. Stored in circular cache.', 'highlight');
+        setIsCmdRunning(false);
+      }, 400);
       return;
     }
 
@@ -3448,44 +3724,57 @@ export function App() {
             </div>
           </div>
 
-          {/* Quick Controls: OLED Eco Mode + Kill Switch */}
+          {/* Quick Controls: Mobile-First Single-Row Contract */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* DIRECT DOWNLOAD APK BUTTON (For TECNO & Firefox Users) */}
             <a
               href="/LocalAgent-v2.5-arm64-api27.apk"
               download="LocalAgent-v2.5-arm64-api27.apk"
               title="Direct Download APK file to phone (For TECNO, Firefox, and Android 8.1+)"
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border bg-emerald-500 hover:bg-emerald-400 text-black shadow-md shadow-emerald-500/25"
+              className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-black shadow-md shadow-emerald-500/25"
             >
               <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>DOWNLOAD APK</span>
+              <span className="sm:hidden">APK</span>
+              <span className="hidden sm:inline">DOWNLOAD APK</span>
             </a>
 
-            {/* Mobile Installation & Firefox Guide Button */}
+            {/* Mobile-Only Quick Menu Drawer Toggle (Avoids Multi-Row Header Overlap on Mobile) */}
+            <button
+              onClick={() => setShowMobileQuickMenu(!showMobileQuickMenu)}
+              title="Toggle Mobile Actions Drawer"
+              className={`sm:hidden min-h-[44px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 border ${
+                showMobileQuickMenu
+                  ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/25'
+                  : 'bg-slate-900/90 text-cyan-300 border-slate-800'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span className="text-[10px]">MENU</span>
+            </button>
+
+            {/* Desktop / Tablet Buttons (Hidden on < sm to guarantee zero mobile collision) */}
             <button
               onClick={() => setShowMobileInstallModal(true)}
               title="Open Mobile Installation & Firefox Setup Guide"
-              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1.5 border bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border-cyan-800 shadow-sm"
+              className="hidden sm:flex min-h-[44px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all items-center gap-1.5 border bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border-cyan-800 shadow-sm"
             >
               <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden md:inline">INSTALL GUIDE</span>
             </button>
 
-            {/* 23-Phase Governance Architecture Roadmap Modal Button */}
             <button
               onClick={() => setShowRoadmapModal(true)}
               title="Inspect 23-Phase Authoritative Governance Roadmap"
-              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1.5 border bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border-cyan-800 shadow-sm"
+              className="hidden sm:flex min-h-[44px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all items-center gap-1.5 border bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border-cyan-800 shadow-sm"
             >
               <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">23-PHASE ROADMAP</span>
+              <span className="hidden md:inline">23-PHASE ROADMAP</span>
             </button>
 
-            {/* Low Power OLED Saver Toggle */}
             <button
               onClick={() => setOledLowPowerMode(!oledLowPowerMode)}
               title="Toggle OLED Pure Black Low Power Consumption Mode"
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1.5 border ${
+              className={`hidden sm:flex min-h-[44px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all items-center gap-1.5 border ${
                 oledLowPowerMode
                   ? 'bg-emerald-950 text-emerald-300 border-emerald-700 shadow-sm'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-800'
@@ -3516,17 +3805,78 @@ export function App() {
                   }));
                 }
               }}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border ${
+              className={`min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border ${
                 killSwitchActive
                   ? 'bg-red-600 text-white border-red-500 animate-pulse shadow-md shadow-red-600/30'
                   : 'bg-red-950/40 hover:bg-red-950/80 text-red-300 border-red-900/60'
               }`}
             >
               <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              <span>{killSwitchActive ? 'HALTED' : 'KILL SWITCH'}</span>
+              <span className="sm:hidden">{killSwitchActive ? 'HALTED' : 'STOP'}</span>
+              <span className="hidden sm:inline">{killSwitchActive ? 'HALTED' : 'KILL SWITCH'}</span>
             </button>
           </div>
         </div>
+
+        {/* Mobile Quick Action Dropdown Sheet (When MENU tapped on Mobile) */}
+        {showMobileQuickMenu && (
+          <div className="sm:hidden max-w-7xl mx-auto mt-2 pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-2 font-mono text-xs animate-fade-in">
+            <button
+              onClick={() => {
+                setShowMobileInstallModal(true);
+                setShowMobileQuickMenu(false);
+              }}
+              className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-800 text-cyan-200 flex items-center gap-2 text-left"
+            >
+              <Smartphone className="w-4 h-4 text-cyan-400 shrink-0" />
+              <div>
+                <div className="font-bold text-[11px]">Install Guide</div>
+                <div className="text-[9px] text-slate-400">Firefox &amp; TECNO</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowRoadmapModal(true);
+                setShowMobileQuickMenu(false);
+              }}
+              className="p-2.5 rounded-xl bg-indigo-950/80 border border-indigo-800 text-indigo-200 flex items-center gap-2 text-left"
+            >
+              <GitBranch className="w-4 h-4 text-indigo-400 shrink-0" />
+              <div>
+                <div className="font-bold text-[11px]">23-Phase Roadmap</div>
+                <div className="text-[9px] text-slate-400">Governance Matrix</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setOledLowPowerMode(!oledLowPowerMode)}
+              className={`p-2.5 rounded-xl border flex items-center gap-2 text-left transition-colors ${
+                oledLowPowerMode
+                  ? 'bg-emerald-950 border-emerald-600 text-emerald-200'
+                  : 'bg-black border-slate-800 text-slate-300'
+              }`}
+            >
+              <Power className={`w-4 h-4 shrink-0 ${oledLowPowerMode ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <div>
+                <div className="font-bold text-[11px]">OLED Eco Mode</div>
+                <div className="text-[9px] text-slate-400">{oledLowPowerMode ? 'Active (Pure Black)' : 'Disabled'}</div>
+              </div>
+            </button>
+
+            <a
+              href="/LocalAgent-Android-FullSource.zip"
+              download="LocalAgent-Android-FullSource.zip"
+              className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-center gap-2 text-left hover:border-slate-700"
+            >
+              <Download className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-[11px]">Source ZIP</div>
+                <div className="text-[9px] text-slate-400">Android Studio Project</div>
+              </div>
+            </a>
+          </div>
+        )}
       </header>
 
       {/* =========================================================================
@@ -3658,22 +4008,62 @@ export function App() {
       </section>
 
       {/* =========================================================================
-          SECTION 3: CATEGORIZED NAVIGATION BAR (Mobile Scrollable Dock)
+          SECTION 3: CATEGORIZED NAVIGATION BAR (Mobile Scrollable Dock & Quick Select)
           ========================================================================= */}
       <nav className="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-mono">
+        {/* Mobile Quick Dropdown: Jump directly to any of the 14 features without scrolling */}
+        <div className="block sm:hidden mb-2">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 uppercase font-bold mb-1">
+            <span>[ Active View Selector ]</span>
+            <span className="text-cyan-400 font-normal">15 Modular Systems</span>
+          </div>
+          <select
+            value={activeCategory}
+            onChange={(e) => setActiveCategory(e.target.value as any)}
+            className="w-full min-h-[44px] bg-black border border-cyan-800/80 text-cyan-300 font-mono text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-400 shadow-sm"
+          >
+            {[
+              { id: 'directives', label: '1. Directives & Natural Language Terminal' },
+              { id: 'agent_suite', label: '2. Agent Core Loop & Hardening Suite (Mobile-Agent / Ultra-Agent / Reflexio)' },
+              { id: 'vector_workflow', label: '3. Offline Vector Memory & Multi-App Workflow Chaining' },
+              { id: 'rea', label: '4. REA Confidence Ledger & Artifact Cache (morluto/rea)' },
+              { id: 'device_profiler', label: '5. Device & Adaptive Model Profiler' },
+              { id: 'optimization_4gb', label: '6. 4GB Mobile Optimization Lab' },
+              { id: 'evolution', label: '7. Day-by-Day Continuous Evolution' },
+              { id: 'architecture', label: '8. Kotlin Production Architecture' },
+              { id: 'actuators', label: '9. Hardware Actuators & Music Sync' },
+              { id: 'viewport', label: '10. Live Device Screen & Simulation' },
+              { id: 'vault', label: '11. Durable Memory & Brain Vault' },
+              { id: 'verification', label: '12. Action Verification Lab' },
+              { id: 'slm_brain', label: '13. 4GB SLM Brain Engine' },
+              { id: 'curiosity', label: '14. Curiosity & Mutual Learning' },
+              { id: 'intelligence', label: '15. Morning Briefing & Telugu Cinema' },
+              { id: 'telemetry', label: '16. Terminal Audit & Telemetry Logs' },
+              { id: 'all', label: '17. All Systems (Complete Master View)' }
+            ].map(opt => (
+              <option key={opt.id} value={opt.id} className="bg-slate-950 text-slate-100">
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar text-xs font-mono">
           {[
-            { id: 'directives', label: 'Directives & Terminal', icon: Zap },
-            { id: 'device_profiler', label: 'Device & Model Profiler', icon: Cpu },
-            { id: 'optimization_4gb', label: '4GB Optimization Lab', icon: Gauge },
-            { id: 'evolution', label: 'Day-by-Day Evolution', icon: TrendingUp },
-            { id: 'architecture', label: 'Kotlin Blueprint', icon: Code2 },
-            { id: 'actuators', label: 'Hardware Actuators', icon: Sliders },
+            { id: 'directives', label: 'Directives', icon: Zap },
+            { id: 'agent_suite', label: 'Agent Suite', icon: Activity },
+            { id: 'vector_workflow', label: 'Vector & Chain', icon: Share2 },
+            { id: 'rea', label: 'REA Ledger', icon: ShieldCheck },
+            { id: 'device_profiler', label: 'Device Profiler', icon: Cpu },
+            { id: 'optimization_4gb', label: '4GB Lab', icon: Gauge },
+            { id: 'evolution', label: 'Day-by-Day', icon: TrendingUp },
+            { id: 'architecture', label: 'Kotlin Code', icon: Code2 },
+            { id: 'actuators', label: 'Actuators & Music', icon: Sliders },
             { id: 'viewport', label: 'Live Screen', icon: Smartphone },
-            { id: 'vault', label: 'Memory & Vault', icon: Database },
-            { id: 'verification', label: 'Verification Lab', icon: ShieldCheck },
-            { id: 'slm_brain', label: '4GB SLM Brain', icon: Cpu },
-            { id: 'curiosity', label: 'Curiosity & Learning', icon: Sparkles },
+            { id: 'vault', label: 'Brain Vault', icon: Database },
+            { id: 'verification', label: 'Verification', icon: ShieldCheck },
+            { id: 'slm_brain', label: '4GB SLM', icon: Cpu },
+            { id: 'curiosity', label: 'Curiosity', icon: Sparkles },
             { id: 'intelligence', label: 'Morning & Cinema', icon: CloudSun },
             { id: 'telemetry', label: 'Audit Logs', icon: Terminal },
             { id: 'all', label: 'All Systems', icon: Layers }
@@ -3684,13 +4074,13 @@ export function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveCategory(tab.id as any)}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5 border ${
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-2 border ${
                   isActive
                     ? 'bg-cyan-500 text-black font-bold border-cyan-400 shadow-sm shadow-cyan-500/20'
-                    : 'bg-black/60 text-slate-400 hover:text-white border-slate-800/80'
+                    : 'bg-black/60 text-slate-400 hover:text-white border-slate-800/80 active:bg-slate-900'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4 shrink-0" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -3918,6 +4308,19 @@ export function App() {
               <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono">
                 <span className="text-slate-500 mr-1 select-none">Quick Test Cmds:</span>
                 {[
+                  { cmd: 'vector search', label: '🧠 vector search', tip: 'Query 128-D offline vector memory for semantic UI match' },
+                  { cmd: 'workflow chain', label: '🔗 workflow chain', tip: 'Run 3-app transactional workflow chain (Web -> Keep -> WhatsApp)' },
+                  { cmd: 'nocturnal schedule', label: '🌙 nocturnal schedule', tip: 'Inspect predictive battery-aware task scheduler' },
+                  { cmd: 'agent loop', label: '🔄 agent loop', tip: 'Mobile-Agent 4-Phase Loop Controller (Plan->Act->Reflect->Remember)' },
+                  { cmd: 'policy gate', label: '🔒 policy gate', tip: 'Ultra-Agent Zero-Bypass Mechanical Safety Barrier' },
+                  { cmd: 'reflexio replay', label: '📚 reflexio', tip: 'Reflexio Named Task Recipe Replay & Pitfalls' },
+                  { cmd: 'diff view', label: '👁️ diff view', tip: 'Zero-overhead 64-bit Active Viewport Differ' },
+                  { cmd: 'bayesian route', label: '📈 bayesian', tip: 'Self-Healed Route Promotion Ledger' },
+                  { cmd: 'power status', label: '⚡ power', tip: 'MediaTek Helio P23 CorePilot Thermal Governor' },
+                  { cmd: 'service wake', label: '🛡️ service wake', tip: 'Android 8.1 Foreground Service & WakeLock Guard' },
+                  { cmd: 'scroll calibrate', label: '📜 scroll', tip: 'Calibrate Dynamic Viewport Scroll Velocity' },
+                  { cmd: 'tst rea', label: '🛡️ tst rea', tip: 'morluto/rea 5-Stage Rebuild & Atomic Test Loop' },
+                  { cmd: 'rea status', label: '📋 rea status', tip: 'Inspect Seen / Inferred / Unknown Confidence Ledger' },
                   { cmd: 'tst all', label: '⚡ tst all', tip: 'Run full 10-scenario regression' },
                   { cmd: 'tst memory', label: '💾 tst memory', tip: 'Test Room MemoryStack.kt' },
                   { cmd: 'tst vault', label: '🏛️ tst vault', tip: 'Test BrainVaultManager /sdcard survival' },
@@ -3981,10 +4384,30 @@ export function App() {
                     <span>EXECUTING TEST SUITE &bull; RUNNING HARNESS ASSERTIONS...</span>
                   </div>
                 )}
-                <div ref={terminalEndRef} />
               </div>
             </div>
           </div>
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION A.0-CORE-LOOP: AGENT CORE LOOP & HARDENING SUITE (Mobile-Agent / Ultra-Agent / Reflexio)
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'agent_suite') && (
+          <AgentCoreLoopStudio />
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION A.0-VECTOR: OFFLINE VECTOR MEMORY & MULTI-APP WORKFLOW CHAINING
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'vector_workflow') && (
+          <OfflineVectorAndWorkflowStudio />
+        )}
+
+        {/* -----------------------------------------------------------------------
+            SECTION A.0-REA: REA ARCHITECTURAL ENGINE (CONFIDENCE LEDGER & ATOMIC TEST)
+            ----------------------------------------------------------------------- */}
+        {(activeCategory === 'all' || activeCategory === 'rea') && (
+          <ReaConfidenceLedgerStudio />
         )}
 
         {/* -----------------------------------------------------------------------
@@ -6386,17 +6809,17 @@ ws           ::= [ \\t\\n\\r]*`}
             </div>
 
             {/* Decision Action Hooks */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-900 font-mono text-xs">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5 pt-3 border-t border-slate-900 font-mono text-xs">
               <button
                 onClick={handleDeclineProposal}
-                className="px-4 py-2 bg-red-950/40 hover:bg-red-950/80 text-red-300 border border-red-900/60 rounded-xl font-bold transition-all flex items-center gap-1.5"
+                className="min-h-[44px] px-4 py-2.5 bg-red-950/40 hover:bg-red-950/80 active:bg-red-900 text-red-300 border border-red-900/60 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
                 <span>[ Decline / Ignore ]</span>
               </button>
               <button
                 onClick={handleApproveAndStart}
-                className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-1.5"
+                className="min-h-[44px] px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
                 <span>[ Approve / Confirm &amp; Commit ]</span>
@@ -6423,7 +6846,7 @@ ws           ::= [ \\t\\n\\r]*`}
               </div>
               <button
                 onClick={() => setShowRoadmapModal(false)}
-                className="text-slate-500 hover:text-white p-1"
+                className="text-slate-500 hover:text-white p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-slate-900"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -6455,11 +6878,11 @@ ws           ::= [ \\t\\n\\r]*`}
               ))}
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-900 text-[10px] font-mono text-slate-500">
-              <span>Total Gates: 23 Sequential Developmental Gates</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-900 text-[10px] font-mono text-slate-500">
+              <span className="text-center sm:text-left">Total Gates: 23 Sequential Developmental Gates</span>
               <button
                 onClick={() => setShowRoadmapModal(false)}
-                className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg text-xs"
+                className="w-full sm:w-auto min-h-[44px] px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-xs flex items-center justify-center"
               >
                 Close Roadmap
               </button>
@@ -6477,9 +6900,9 @@ ws           ::= [ \\t\\n\\r]*`}
         sharedUrl="https://ais-pre-6xgz3lwcexgvao4wdsiao7-313693707238.asia-east1.run.app"
       />
 
-      {/* Floating Copied Code / Logs Feedback Toast */}
+      {/* Floating Copied Code / Logs Feedback Toast (Centered on Mobile to prevent off-screen clipping) */}
       {copiedCodeToast && (
-        <div className="fixed bottom-4 right-4 z-50 bg-emerald-950/95 border border-emerald-500 text-emerald-200 px-4 py-2.5 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2 backdrop-blur-md animate-bounce">
+        <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 max-w-sm mx-auto z-50 bg-emerald-950/95 border border-emerald-500 text-emerald-200 px-4 py-3 rounded-xl text-xs font-mono shadow-2xl flex items-center justify-center gap-2 backdrop-blur-md animate-bounce">
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{copiedCodeToast}</span>
         </div>

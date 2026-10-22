@@ -533,37 +533,58 @@ export function DeviceModelProfiler({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 text-xs font-mono self-start sm:self-auto overflow-x-auto no-scrollbar">
-          {[
-            { id: 'profile', label: 'Device Profile & Ceiling', icon: Gauge },
-            { id: 'tiers', label: 'Multi-Tier Escalation', icon: Layers },
-            { id: 'approval', label: 'Permission Gate & Approvals', icon: ShieldCheck },
-            { id: 'registry', label: 'Adaptive Model Registry', icon: Database },
-            { id: 'benchmark', label: 'Benchmark Simulator', icon: Play },
-            { id: 'code', label: 'Architecture Kotlin Code', icon: FileCode }
-          ].map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 text-[11px] whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-cyan-500 text-black font-bold shadow-sm shadow-cyan-500/20'
-                    : 'bg-black text-slate-400 hover:text-white border border-slate-900'
-                }`}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        <div className="w-full sm:w-auto">
+          {/* Mobile dropdown for instant tab selection */}
+          <div className="block sm:hidden mb-1">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as any)}
+              className="w-full min-h-[44px] bg-black border border-cyan-800 text-cyan-300 font-mono text-xs font-bold rounded-xl px-3 py-2 focus:outline-none"
+            >
+              <option value="profile">1. Device Profile &amp; Safe RAM Ceiling</option>
+              <option value="tiers">2. Multi-Tier Hardware Escalation (T1-T3)</option>
+              <option value="approval">3. Permission Gate &amp; Human Approval Card</option>
+              <option value="registry">4. Adaptive Model Registry (SmolLM/Qwen)</option>
+              <option value="benchmark">5. Live Benchmark Simulator (TTFT &amp; TPS)</option>
+              <option value="code">6. Architecture Kotlin Production Code</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs font-mono overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'profile', label: 'Profile', fullLabel: 'Device Profile & Ceiling', icon: Gauge },
+              { id: 'tiers', label: 'Tiers', fullLabel: 'Multi-Tier Escalation', icon: Layers },
+              { id: 'approval', label: 'Safety Gate', fullLabel: 'Permission Gate & Approvals', icon: ShieldCheck },
+              { id: 'registry', label: 'Models', fullLabel: 'Adaptive Model Registry', icon: Database },
+              { id: 'benchmark', label: 'Benchmark', fullLabel: 'Benchmark Simulator', icon: Play },
+              { id: 'code', label: 'Kotlin Code', fullLabel: 'Architecture Kotlin Code', icon: FileCode }
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs whitespace-nowrap border ${
+                    activeTab === tab.id
+                      ? 'bg-cyan-500 text-black font-bold border-cyan-400 shadow-sm shadow-cyan-500/20'
+                      : 'bg-black text-slate-400 hover:text-white border-slate-900 active:bg-slate-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    <span className="sm:hidden">{tab.label}</span>
+                    <span className="hidden sm:inline">{tab.fullLabel}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* Preset Selector Strip */}
-      <div className="p-3 bg-black border border-slate-900 rounded-xl space-y-2">
-        <div className="flex items-center justify-between text-xs font-mono">
+      <div className="p-3.5 bg-black border border-slate-900 rounded-xl space-y-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
           <span className="text-slate-400 font-bold uppercase flex items-center gap-1.5">
             <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
             Select Device Hardware Target:
@@ -572,7 +593,7 @@ export function DeviceModelProfiler({
             <span className="text-[10px] text-slate-500">Mode:</span>
             <button
               onClick={() => setIsCustomMode(!isCustomMode)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+              className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                 isCustomMode ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-900 text-slate-400 border-slate-800'
               }`}
             >
@@ -582,7 +603,7 @@ export function DeviceModelProfiler({
         </div>
 
         {!isCustomMode ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
             {DEVICE_PRESETS.map(preset => (
               <button
                 key={preset.id}
@@ -591,10 +612,10 @@ export function DeviceModelProfiler({
                   const tier: 'TIER_1' | 'TIER_2' | 'TIER_3' = preset.totalRamMb <= 4096 ? 'TIER_1' : preset.totalRamMb <= 8192 ? 'TIER_2' : 'TIER_3';
                   onSelectPreset?.(preset, tier);
                 }}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
+                className={`min-h-[44px] p-2.5 rounded-xl border text-left transition-all ${
                   selectedPresetId === preset.id
                     ? 'bg-cyan-950/60 text-white border-cyan-400 shadow-sm shadow-cyan-500/20'
-                    : 'bg-black/60 border-slate-900 text-slate-300 hover:border-slate-800'
+                    : 'bg-black/60 border-slate-900 text-slate-300 hover:border-slate-800 active:bg-slate-900'
                 }`}
               >
                 <div className="font-bold text-[11px] truncate">{preset.name}</div>

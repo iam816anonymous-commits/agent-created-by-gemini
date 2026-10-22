@@ -426,13 +426,13 @@ export const DayByDayEvolutionCenter: React.FC<DayByDayEvolutionCenterProps> = (
         </div>
 
         {/* Action Button: Trigger Overnight Evolution */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={handleTriggerOvernightPass}
             disabled={isEvolving}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-bold text-xs rounded-xl font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50 shrink-0"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 active:from-emerald-600 active:to-cyan-600 text-black font-bold text-xs rounded-xl font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50"
           >
-            <RotateCw className={`w-4 h-4 ${isEvolving ? 'animate-spin' : ''}`} />
+            <RotateCw className={`w-4 h-4 shrink-0 ${isEvolving ? 'animate-spin' : ''}`} />
             <span>{isEvolving ? 'Evolving Overnight...' : 'Trigger Overnight Evolution Pass'}</span>
           </button>
         </div>
@@ -447,41 +447,50 @@ export const DayByDayEvolutionCenter: React.FC<DayByDayEvolutionCenterProps> = (
       )}
 
       {/* Sub-tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-900 pb-2 text-xs font-mono">
+      <div className="flex items-center gap-2 border-b border-slate-900 pb-2 text-xs font-mono overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveCenterTab('timeline')}
-          className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+          className={`min-h-[44px] px-3.5 py-2 rounded-xl border flex items-center gap-1.5 transition-all whitespace-nowrap ${
             activeCenterTab === 'timeline'
-              ? 'bg-emerald-950 text-emerald-300 border-emerald-600 font-bold'
+              ? 'bg-emerald-950 text-emerald-300 border-emerald-600 font-bold shadow-sm'
               : 'bg-black text-slate-400 hover:text-white border-slate-900'
           }`}
         >
-          <History className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Lifelong Evolution Timeline</span>
+          <History className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span>
+            <span className="sm:hidden">Timeline</span>
+            <span className="hidden sm:inline">Lifelong Evolution Timeline</span>
+          </span>
         </button>
 
         <button
           onClick={() => setActiveCenterTab('governor')}
-          className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+          className={`min-h-[44px] px-3.5 py-2 rounded-xl border flex items-center gap-1.5 transition-all whitespace-nowrap ${
             activeCenterTab === 'governor'
-              ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
+              ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold shadow-sm'
               : 'bg-black text-slate-400 hover:text-white border-slate-900'
           }`}
         >
-          <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Helio P23 Governor &amp; Autotuner</span>
+          <Cpu className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span>
+            <span className="sm:hidden">Governor</span>
+            <span className="hidden sm:inline">Helio P23 Governor &amp; Autotuner</span>
+          </span>
         </button>
 
         <button
           onClick={() => setActiveCenterTab('pareto')}
-          className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+          className={`min-h-[44px] px-3.5 py-2 rounded-xl border flex items-center gap-1.5 transition-all whitespace-nowrap ${
             activeCenterTab === 'pareto'
-              ? 'bg-pink-950 text-pink-300 border-pink-600 font-bold'
+              ? 'bg-pink-950 text-pink-300 border-pink-600 font-bold shadow-sm'
               : 'bg-black text-slate-400 hover:text-white border-slate-900'
           }`}
         >
-          <Gauge className="w-3.5 h-3.5 text-pink-400" />
-          <span>Pareto Multi-Objective Frontier</span>
+          <Gauge className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+          <span>
+            <span className="sm:hidden">Pareto</span>
+            <span className="hidden sm:inline">Pareto Multi-Objective Frontier</span>
+          </span>
         </button>
       </div>
 
