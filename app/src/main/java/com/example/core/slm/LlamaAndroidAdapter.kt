@@ -1,22 +1,24 @@
 package com.example.core.slm
 
+import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.File
+
+class NativeModelUnavailableException(message: String) : Exception(message)
 
 /**
- * Adapter modeled after:
- * 1. ffmpegkit-maintained/llama-android (clean AAR wrapper with coroutine APIs)
- * 2. mayank171/SmolLM-Android-LlamaGPU (Kotlin Flow streaming & live RAM benchmark metrics)
- *
- * Tailored for TECNO Camon i Click (MediaTek Helio P23, 4GB RAM, Android 8.1 / API 27).
+ * Adapter interfacing with genuine llama.cpp JNI native bridge.
  *
  * Guarantees:
  * - On-Demand Zero-Leak Lifecycle via AutoCloseable [LlamaSession].
  * - Enforces < 500 MB RAM budget; strictly blocks 2B+ models.
- * - Streams tokens over Kotlin Flow with real-time TPS (Tokens Per Second) calculation.
+ * - Streams tokens using native GBNF grammar constraints.
+ * - Throws explicit [NativeModelUnavailableException] when libraries or weights are missing,
+ *   never returning simulated fake tokens.
  */
 class LlamaAndroidAdapter {
 
@@ -36,6 +38,7 @@ class LlamaAndroidAdapter {
     class LlamaSession(
         val profile: LocalSlmProfile,
         val nativeHandle: Long,
+        val grammarHandle: Long = 0L,
         private val onClosed: () -> Unit
     ) : AutoCloseable {
         private var isClosed = false
@@ -51,12 +54,13 @@ class LlamaAndroidAdapter {
     }
 
     /**
-     * Loads the model into native heap memory.
-     * Enforces the 500 MB budget and blocks models >= 1B parameters.
+     * Loads the model into native heap memory via JNI.
+     * Enforces the 500 MB budget and blocks models >= 2B parameters.
      */
     suspend fun loadModelSession(
         profile: LocalSlmProfile,
-        contextTokens: Int = 1024
+        contextTokens: Int = 1024,
+        modelDir: File? = null
     ): LlamaSession = withContext(Dispatchers.IO) {
         if (profile.requiredRamMb > 500) {
             throw IllegalStateException(
@@ -64,21 +68,43 @@ class LlamaAndroidAdapter {
             )
         }
 
-        // Emulate native llama_init_from_file handle allocation
-        val dummyNativeHandle = System.currentTimeMillis()
+        if (!LlamaNativeBridge.isNativeLibraryLoaded) {
+            throw NativeModelUnavailableException(
+                "Native libllama-bridge.so library is not loaded on this device architecture."
+            )
+        }
+
+        val baseDir = modelDir ?: File(Environment.getExternalStorageDirectory(), "LocalAgent/models")
+        val modelFile = File(baseDir, profile.modelName)
+        if (!modelFile.exists() || !modelFile.canRead()) {
+            throw NativeModelUnavailableException(
+                "GGUF model file '${profile.modelName}' not found at ${modelFile.absolutePath}."
+            )
+        }
+
+        val handle = LlamaNativeBridge.nativeInitContext(modelFile.absolutePath, nThreads = 4, nCtx = contextTokens)
+        if (handle == 0L) {
+            throw NativeModelUnavailableException("nativeInitContext returned null pointer for ${modelFile.name}.")
+        }
+
+        val grammarHandle = LlamaNativeBridge.nativeCompileGbnf(LocalGbnfGrammar.TOOL_CALL_GBNF_GRAMMAR)
+
         LlamaSession(
             profile = profile,
-            nativeHandle = dummyNativeHandle,
+            nativeHandle = handle,
+            grammarHandle = grammarHandle,
             onClosed = {
-                // Emulate native llama_free() and munmap()
+                if (grammarHandle != 0L) {
+                    LlamaNativeBridge.nativeFreeGrammar(grammarHandle)
+                }
+                LlamaNativeBridge.nativeFreeContext(handle)
                 System.gc()
             }
         )
     }
 
     /**
-     * Completes prompt using GBNF grammar, emitting tokens via Kotlin Flow.
-     * Studied from SmolLM-Android-LlamaGPU.
+     * Completes prompt using GBNF grammar via native JNI bridge.
      */
     fun completeStream(
         session: LlamaSession,
@@ -89,22 +115,18 @@ class LlamaAndroidAdapter {
             throw IllegalStateException("Cannot run inference on closed LlamaSession.")
         }
 
-        // Emulate deterministic token emission conforming to GBNF JSON
-        val defaultJsonTokens = listOf(
-            "{\n",
-            "  \"intent\": \"EXECUTE_ACTION\",\n",
-            "  \"confidence\": 0.96,\n",
-            "  \"plan\": [\n",
-            "    {\"step\": 1, \"action\": \"LAUNCH_APP\", \"target\": \"com.google.android.keep\"},\n",
-            "    {\"step\": 2, \"action\": \"CLICK_ID\", \"target\": \"new_note_button\"},\n",
-            "    {\"step\": 3, \"action\": \"TYPE_TEXT\", \"target\": \"edit_text\", \"text\": \"Task notes\"}\n",
-            "  ]\n",
-            "}"
+        if (session.nativeHandle == 0L) {
+            throw NativeModelUnavailableException("Active native context handle is invalid.")
+        }
+
+        val output = LlamaNativeBridge.nativeCompleteConstrained(
+            session.nativeHandle,
+            session.grammarHandle,
+            prompt
         )
 
-        for (token in defaultJsonTokens) {
-            emit(token)
-            kotlinx.coroutines.delay(20) // Emulates ~20 tok/sec on Helio P23
+        if (output.isNotBlank()) {
+            emit(output)
         }
     }.flowOn(Dispatchers.Default)
 

@@ -20,16 +20,18 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Signing configurations for local and CI builds
+  // Signing configurations for production releases
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      val keystoreFile = file(keystorePath)
-      if (keystoreFile.exists()) {
-        storeFile = keystoreFile
-        storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-        keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      if (!keystorePath.isNullOrBlank()) {
+        val keystoreFile = file(keystorePath)
+        if (keystoreFile.exists()) {
+          storeFile = keystoreFile
+          storePassword = System.getenv("STORE_PASSWORD") ?: ""
+          keyAlias = System.getenv("KEY_ALIAS") ?: ""
+          keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        }
       }
     }
   }
@@ -41,12 +43,9 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
-      if (releaseKeystore.exists()) {
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
         signingConfig = signingConfigs.getByName("release")
-      } else {
-        // Fallback to debug signing so CI can produce an installable release test APK
-        signingConfig = signingConfigs.getByName("debug")
       }
     }
     debug {
@@ -102,11 +101,12 @@ kotlin {
   jvmToolchain(17)
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
+// Configure the Secrets Gradle Plugin to avoid baking credentials into APK BuildConfig
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("GEMINI_API_KEY") // Protect API keys: use Android Keystore or user entry at runtime
 }
 
 dependencies {

@@ -62,7 +62,7 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
   const [temperature, setTemperature] = useState(0.2);
   const [nThreads, setNThreads] = useState(4);
   const [nCtx, setNCtx] = useState(1024);
-  const [modelType, setModelType] = useState<'SmolLM2-360M' | 'Qwen2.5-0.5B' | 'Gemma-2-2B'>('SmolLM2-360M');
+  const [modelType, setModelType] = useState<'SmolLM2-360M' | 'Qwen2.5-0.5B'>('SmolLM2-360M');
   const [copiedCodeToast, setCopiedCodeToast] = useState<string | null>(null);
 
   // Native C++ Memory State
@@ -92,11 +92,18 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
 
   const abortControllerRef = useRef<boolean>(false);
 
-  // Copy code helper
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCodeToast(label);
-    setTimeout(() => setCopiedCodeToast(null), 2000);
+  // Copy code helper with error handling
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      }
+      setCopiedCodeToast(label);
+      setTimeout(() => setCopiedCodeToast(null), 2000);
+    } catch {
+      setCopiedCodeToast(label);
+      setTimeout(() => setCopiedCodeToast(null), 2000);
+    }
   };
 
   // Real Token Generation Loop constrained to GBNF Action Schema
@@ -107,8 +114,8 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
     setRawOutput('');
     abortControllerRef.current = false;
 
-    // Simulate native context allocation in C++ heap
-    const modelWeightCost = modelType === 'SmolLM2-360M' ? 242 : modelType === 'Qwen2.5-0.5B' ? 348 : 820;
+    // Strict 500MB budget ceiling on Helio P23: only lightweight sub-500MB models permitted
+    const modelWeightCost = modelType === 'SmolLM2-360M' ? 242 : 348;
     setNativeRssMb(42.4 + modelWeightCost);
     setContextAllocatedMb(modelWeightCost);
 
@@ -249,13 +256,13 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
           </div>
           <div>
             <h2 className="text-sm sm:text-base font-bold text-white font-mono uppercase tracking-wide flex items-center gap-2 flex-wrap">
-              <span>NATIVE LLAMA.CPP JNI BRIDGE &amp; GBNF INFERENCE ENGINE</span>
+              <span>LLAMA.CPP JNI ARCHITECTURE SPECIFICATION &amp; GBNF INFERENCE ENGINE</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
-                16 KB PAGE-ALIGNED &bull; ARM64 NEON
+                16 KB PAGE-ALIGNED &bull; ARM64 NEON &bull; C++ SPEC
               </span>
             </h2>
             <p className="text-xs text-slate-400 font-sans mt-0.5">
-              Zero-allocation C++ JNI bridge bindings to <code className="text-cyan-300">libllama.so</code> with grammar-constrained JSON tool dispatch
+              Zero-allocation C++ JNI bridge bindings to <code className="text-cyan-300">libllama.so</code> with grammar-constrained JSON tool dispatch architecture
             </p>
           </div>
         </div>
@@ -283,7 +290,7 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
       {/* Sub-Navigation Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-slate-900 pb-2 text-xs font-mono">
         {[
-          { id: 'RUNNER', label: '1. GBNF Token Streamer', icon: Zap },
+          { id: 'RUNNER', label: '1. GBNF Schema Output Visualizer', icon: Zap },
           { id: 'GRAMMAR_COMPILER', label: '2. GBNF Grammar Editor', icon: Sliders },
           { id: 'JNI_SOURCES', label: '3. C++ JNI & CMake Source', icon: FileCode },
           { id: 'HEAP_TRACKER', label: '4. Zero-Leak Memory Lifecycle', icon: HardDrive },
@@ -317,15 +324,14 @@ export function LlamaJniBridgeStudio({ oledMode = false }: { oledMode?: boolean 
             {/* Model & Runtime Settings */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs font-mono">
               <div className="p-2.5 bg-slate-950 border border-slate-900 rounded-xl space-y-1">
-                <span className="text-slate-500 uppercase text-[10px]">Active SLM Model</span>
+                <span className="text-slate-500 uppercase text-[10px]">Active SLM Model (&lt;500MB Budget)</span>
                 <select
                   value={modelType}
                   onChange={e => setModelType(e.target.value as any)}
                   className="w-full bg-black border border-slate-800 rounded p-1 text-white font-bold text-xs"
                 >
-                  <option value="SmolLM2-360M">SmolLM2-360M (242MB Q4)</option>
-                  <option value="Qwen2.5-0.5B">Qwen2.5-0.5B (348MB Q4)</option>
-                  <option value="Gemma-2-2B">Gemma-2-2B (820MB Q4)</option>
+                  <option value="SmolLM2-360M">SmolLM2-360M (242MB Q4) &bull; Safe</option>
+                  <option value="Qwen2.5-0.5B">Qwen2.5-0.5B (348MB Q4) &bull; Max</option>
                 </select>
               </div>
 

@@ -291,11 +291,11 @@ class ActuatorController(private val context: Context) {
 }`
   },
 
-  'SnapshotDiffer.kt': {
-    fileName: 'SnapshotDiffer.kt',
+  'AccessibilityNodeDiffer.kt': {
+    fileName: 'AccessibilityNodeDiffer.kt',
     packageName: 'com.example.core.diff',
     category: 'View-Tree Comparison & State Signatures',
-    role: 'Traverses AccessibilityNodeInfo hierarchies, computes 64-bit FNV-1a hash signatures, and determines mutations in O(N).',
+    role: 'Traverses AccessibilityNodeInfo hierarchies, computes 64-bit FNV-1a hash signatures, and determines mutations in O(N). Renamed to avoid package collision with engine/SnapshotDiffer.',
     ramImpact: '<0.2 MB (zero heap allocations)',
     code: `package com.example.core.diff
 
@@ -309,7 +309,7 @@ data class ViewNodeSnapshot(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-object SnapshotDiffer {
+object AccessibilityNodeDiffer {
     private const val FNV_64_OFFSET_BASIS = -3750763034362895579L // 14695981039346656037L unsigned
     private const val FNV_64_PRIME = 1099511628211L
 
@@ -3341,11 +3341,19 @@ export const KotlinArchitectureViewer: React.FC<KotlinArchitectureViewerProps> =
 
   const activeSpec = KOTLIN_FILES[selectedFileKey] || KOTLIN_FILES['MemoryStack.kt'];
 
-  const handleCopy = (key: string, code: string) => {
-    navigator.clipboard?.writeText(code);
-    setCopiedKey(key);
-    if (onCopySuccess) onCopySuccess(`Copied ${key} to clipboard!`);
-    setTimeout(() => setCopiedKey(null), 2500);
+  const handleCopy = async (key: string, code: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      }
+      setCopiedKey(key);
+      if (onCopySuccess) onCopySuccess(`Copied ${key} to clipboard!`);
+      setTimeout(() => setCopiedKey(null), 2500);
+    } catch {
+      setCopiedKey(key);
+      if (onCopySuccess) onCopySuccess(`Copied ${key} to clipboard!`);
+      setTimeout(() => setCopiedKey(null), 2500);
+    }
   };
 
   return (

@@ -954,39 +954,33 @@ export function App() {
     if (lower === 'jni llama' || lower === 'tst jni' || lower === 'gbnf' || lower === 'compile gbnf' || lower === 'llama') {
       setIsCmdRunning(true);
       setActiveCategory('llama_jni');
-      addLine('[JNI BRIDGE] Testing llama.cpp Native C++ JNI Bridge & GBNF Sampling...', 'info');
+      addLine('[JNI BRIDGE SPECIFICATION] Inspecting llama.cpp Native C++ JNI Architecture...', 'info');
       setTimeout(() => {
-        addLine('  ├─ JNI Binding: Java_com_example_localagent_slm_LlamaNativeBridge_nativeInitModel', 'pass');
-        addLine('  ├─ Page Alignment: 16 KB Page Alignment (-Wl,-z,max-page-size=16384) verified', 'pass');
-        addLine('  ├─ Vector Math: ARM64-v8a NEON SIMD acceleration enabled (-march=armv8-a+simd)', 'pass');
-        addLine('  ├─ GBNF Schema: Action plan root production rule initialized (0% syntax errors)', 'pass');
-        addLine('  ├─ Logits Sampler: Illegal token masks applied to vocabulary at runtime', 'pass');
-        addLine('  └─ Heap Lifecycle: AutoCloseable model.close() verified (0 MB residual leak)', 'pass');
-        addLine('[PASS] LlamaNativeBridge: Real on-device GBNF-constrained inference bridge verified.', 'highlight');
+        addLine('  ├─ Native C++ Bridge: app/src/main/cpp/llama-bridge.cpp (llama.cpp integration)', 'output');
+        addLine('  ├─ JNI Kotlin Binding: com.example.core.slm.LlamaNativeBridge', 'output');
+        addLine('  ├─ CMake Configuration: Target ARM64-v8a NEON SIMD (-march=armv8-a+simd)', 'output');
+        addLine('  ├─ Page Alignment: Android 15/16 16KB compliance (-Wl,-z,max-page-size=16384)', 'output');
+        addLine('  ├─ Grammar Constraint: LocalGbnfGrammar enforcing strict JSON tool-call schema', 'output');
+        addLine('  └─ Memory Ceiling: Enforcing 500MB budget; rejecting 2B+ models to prevent LMK crash', 'output');
+        addLine('[INFO] Switched to Native JNI Bridge Specification view.', 'info');
         setIsCmdRunning(false);
-      }, 400);
+      }, 250);
       return;
     }
 
     if (lower === 'install direct' || lower === 'install apk' || lower === 'direct install' || lower === 'tst install') {
       setIsCmdRunning(true);
       setActiveCategory('android_multiversion');
-      addLine('[DIRECT INSTALL] Initiating Android Native PackageInstaller Intent Pipeline...', 'info');
+      addLine('[BUILD PIPELINE] Native Android APK Packaging & CI Artifact Policy...', 'info');
       setTimeout(() => {
-        addLine('  ├─ Target Package: LocalAgent-v2.5-arm64-api27.apk (28.4 MB)', 'output');
-        addLine('  ├─ Storage Target: context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)', 'pass');
-        addLine('  ├─ FileProvider URI: content://com.example.localagent.fileprovider/downloads/LocalAgent.apk', 'pass');
-        addLine('  ├─ Permissions: FLAG_GRANT_READ_URI_PERMISSION | FLAG_ACTIVITY_NEW_TASK', 'pass');
-        addLine('  └─ Intent: Intent.ACTION_VIEW with MIME "application/vnd.android.package-archive"', 'pass');
-        const a = document.createElement('a');
-        a.href = '/LocalAgent-v2.5-arm64-api27.apk';
-        a.download = 'LocalAgent-v2.5-arm64-api27.apk';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        addLine('[PASS] Direct Install APK triggered. Native Android installer prompted in foreground.', 'highlight');
+        addLine('  ├─ Source Repository: app/ (Version: 1.0, compileSdk 34, minSdk 24)', 'output');
+        addLine('  ├─ Reproducible Builds: Committed APK binaries removed from repo to prevent untracked drift', 'output');
+        addLine('  ├─ Local Build Command: ./gradlew assembleDebug', 'output');
+        addLine('  ├─ Release Build Command: ./gradlew assembleRelease (Requires KEYSTORE_PATH env)', 'output');
+        addLine('  └─ CI/CD: Automated builds produced via GitHub Actions (.github/workflows/)', 'output');
+        addLine('[INFO] Please run "./gradlew assembleDebug" in app/ to produce a verified binary from current source.', 'info');
         setIsCmdRunning(false);
-      }, 400);
+      }, 250);
       return;
     }
 
@@ -995,62 +989,63 @@ export function App() {
       setActiveCategory('android_multiversion');
       addLine('[CAPABILITY REGISTRY] Inspecting DeviceCapabilityRegistry.kt (API 26 through 36+)...', 'info');
       setTimeout(() => {
-        addLine('  ├─ Active Runtime: Android 8.1 Oreo MR1 (API 27) on MediaTek MT6763T Helio P23', 'pass');
-        addLine('  ├─ Storage Architecture: LEGACY_DIRECT_SDCARD (/sdcard/LocalAgent/brain_vault.json safe)', 'pass');
-        addLine('  ├─ Background Mode: CLASSIC_FOREGROUND_SERVICE + Persistent Notification + WakeLock', 'pass');
-        addLine('  ├─ Page Size Support: 4KB_STANDARD (ARM64-v8a NEON SIMD acceleration active)', 'pass');
-        addLine('  ├─ 16KB Page Alignment Check: Ready for Android 15/16 Baklava (libllama.so compiled -z max-page-size=16384)', 'pass');
-        addLine('  └─ Memory Resident Guard: Strict 48MB heap ceiling enforced (< 48.0 MB safe)', 'pass');
-        addLine('[PASS] DeviceCapabilityRegistry: 100% compliant across API 26–36+ span.', 'highlight');
+        addLine('  ├─ Target Range: Android 8.0 Oreo (API 26) through Android 16 (API 36+)', 'output');
+        addLine('  ├─ Storage Adaptation: Direct public storage on API 26-28; Scoped Storage on API 29+', 'output');
+        addLine('  ├─ Background Mode: ForegroundService with specialUse type for Android 14+ (API 34+)', 'output');
+        addLine('  ├─ Page Alignment: 4KB standard on legacy; 16KB page support prepared for API 35+', 'output');
+        addLine('  └─ Heap Budget: 48MB baseline ceiling for Helio P23 4GB RAM devices', 'output');
+        addLine('[INFO] DeviceCapabilityRegistry mapped across Android 8.0-16 platform span.', 'info');
         setIsCmdRunning(false);
-      }, 350);
+      }, 250);
       return;
     }
 
     if (lower === 'backend router' || lower === 'tst backend' || lower === 'tst router') {
       setIsCmdRunning(true);
       setActiveCategory('android_multiversion');
-      addLine('[INTENT ROUTER] Testing Genuine Multi-Tier IntentBackend Router (Zero Fabricated Data)...', 'info');
+      addLine('[INTENT ROUTER] Inspecting Hierarchical IntentBackend Routing Architecture...', 'info');
       setTimeout(() => {
-        addLine('  ├─ Tier 1 Fast-Path: Deterministic regex evaluation (< 5ms latency, 0 byte GC allocation)', 'pass');
-        addLine('  ├─ Tier 2 Local SLM: On-demand LlamaSession with GBNF grammar constraints (smollm2-360m / qwen2.5-0.5b)', 'pass');
-        addLine('  ├─ Tier 3 Online Cloud: AndroidKeyStore-backed Gemini HTTPS call with TLS 1.3 pinning', 'pass');
-        addLine('  └─ Tier 4 Honest Offline: Network disconnected -> Returns explicit degraded state (0% fake data)', 'pass');
-        addLine('[PASS] IntentBackendRouter: Genuine multi-tier routing verified with zero simulation.', 'highlight');
+        addLine('  ├─ Tier 1: Deterministic Fast-Path (<5ms regex for torch, calculator, keep notes)', 'output');
+        addLine('  ├─ Tier 2: Local On-Device SLM (LlamaNativeBridge with GBNF grammar constraints)', 'output');
+        addLine('  ├─ Tier 3: Cloud Gemini HTTPS (ConnectivityManager active network check required)', 'output');
+        addLine('  └─ Tier 4: Honest Degraded Offline Fallback (Explicit failure; zero fabricated plans)', 'output');
+        addLine('[INFO] IntentBackend interface and HierarchicalIntentRouter active in app/src/main/java/com/example/core/intent/.', 'info');
         setIsCmdRunning(false);
-      }, 350);
+      }, 250);
       return;
     }
 
     if (lower === 'permission check' || lower === 'tst permissions' || lower === 'dynamic permissions') {
       setIsCmdRunning(true);
       setActiveCategory('android_multiversion');
-      addLine('[PERMISSION CHECK] Auditing DynamicPermissionHandler.kt State Matrix...', 'info');
+      addLine('[PERMISSION CHECK] Inspecting DynamicPermissionHandler.kt...', 'info');
       setTimeout(() => {
-        addLine('  ├─ BIND_ACCESSIBILITY_SERVICE: Checked via AccessibilityManager.getEnabledServices() -> ACTIVE', 'pass');
-        addLine('  ├─ CAMERA / TORCH: On-demand checkSelfPermission() -> GRANTED', 'pass');
-        addLine('  ├─ POST_NOTIFICATIONS: Dynamic API 33+ branch (Implicit on API 27) -> SAFE', 'pass');
-        addLine('  ├─ SCHEDULE_EXACT_ALARM: Checked via AlarmManager.canScheduleExactAlarms() -> ACTIVE', 'pass');
-        addLine('  └─ REQUEST_INSTALL_PACKAGES: Special app access verified -> CAN REQUEST INSTALLS', 'pass');
-        addLine('[PASS] DynamicPermissionHandler: All runtime permissions verified.', 'highlight');
+        addLine('  ├─ BIND_ACCESSIBILITY_SERVICE: Evaluated via AccessibilityManager.getEnabledAccessibilityServiceList()', 'output');
+        addLine('  ├─ POST_NOTIFICATIONS: Runtime check enforced on Android 13+ (API 33+)', 'output');
+        addLine('  ├─ SCHEDULE_EXACT_ALARM: Checked via AlarmManager.canScheduleExactAlarms() on API 31+', 'output');
+        addLine('  └─ CAMERA: Dynamic checkSelfPermission before actuating torch', 'output');
+        addLine('[INFO] DynamicPermissionHandler inspects permissions dynamically per API level.', 'info');
         setIsCmdRunning(false);
-      }, 350);
+      }, 250);
       return;
     }
 
     if (lower === 'security audit' || lower === 'tst security' || lower === 'token gate') {
       setIsCmdRunning(true);
       setActiveCategory('android_multiversion');
-      addLine('[SECURITY AUDIT] Running Autonomous Agent Core Security Hardening Audit...', 'info');
+      addLine('[SECURITY AUDIT] Inspecting Hardened Security Architecture...', 'info');
       setTimeout(() => {
-        addLine('  ├─ Dynamic Pairing Token: Ephemeral 6-digit SecureRandom PIN (Shown only on device UI)', 'pass');
-        addLine('  ├─ Bounded Request Buffer: MAX_REQUEST_BODY_BYTES = 65,536 (Helio P23 OOM prevention)', 'pass');
-        addLine('  ├─ CORS Origin Gate: Strict localhost restriction; dropped wildcard * policy', 'pass');
-        addLine('  ├─ Keystore Isolation: Master key stored in hardware-backed AndroidKeyStore (AES-256-GCM)', 'pass');
-        addLine('  └─ TaskApprovalGate: Replaced naive substring matching with structured semantic AST appraisal', 'pass');
-        addLine('[PASS] Security Audit: Zero hardcoded tokens or unauthenticated attack vectors.', 'highlight');
+        addLine('  ├─ RemoteAgentBridge: Dynamic 6-digit SecureRandom PIN (Shown on device; never hardcoded)', 'output');
+        addLine('  ├─ Buffer Protection: MAX_REQUEST_BODY_BYTES = 65,536 (Helio P23 64KB bounded cap)', 'output');
+        addLine('  ├─ Timing Attack Defense: Constant-time MessageDigest.isEqual token verification', 'output');
+        addLine('  ├─ CORS Lockdown: Wildcard * removed; restricted to verified localhost / loopback', 'output');
+        addLine('  ├─ Web Console on GET /: Never embeds authorization token in HTML', 'output');
+        addLine('  ├─ TaskApprovalGate: Word-boundary regex replaces naive substring matching', 'output');
+        addLine('  ├─ Android Manifest: android:allowBackup="false" enforced', 'output');
+        addLine('  └─ Keystore Isolation: Gemini API keys excluded from APK BuildConfig', 'output');
+        addLine('[INFO] Security hardening applied to core Kotlin implementation.', 'info');
         setIsCmdRunning(false);
-      }, 350);
+      }, 250);
       return;
     }
 

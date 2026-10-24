@@ -70,7 +70,7 @@ data class ExecutionTraceRecord(
  * Captures pre- and post-action AccessibilityNodeInfo hierarchies, computes 64-bit FNV-1a
  * state signatures, and highlights mutations without allocating bulky intermediate objects.
  */
-object SnapshotDiffer {
+object AccessibilityNodeDiffer {
 
     private const val FNV_64_OFFSET_BASIS = -3750763034362895579L // 14695981039346656037L unsigned
     private const val FNV_64_PRIME = 1099511628211L

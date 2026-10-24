@@ -224,7 +224,10 @@ data class ResearchScrapeResult(
     val extractedCount: Int,
     val movies: List<ScrapedMovieItem> = emptyList(),
     val rawSummary: String,
-    val scrapedAtMs: Long = System.currentTimeMillis()
+    val scrapedAtMs: Long = System.currentTimeMillis(),
+    val isOnline: Boolean = true,
+    val isFailure: Boolean = false,
+    val provenance: String = "LIVE_WEB_FETCH"
 )
 
 data class AgentSkill(

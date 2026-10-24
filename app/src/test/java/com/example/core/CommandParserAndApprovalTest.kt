@@ -97,4 +97,40 @@ class CommandParserAndApprovalTest {
         assertTrue(approved)
         assertTrue("Plan can execute after explicit approval", gate.canExecute(plan.planId))
     }
+
+    @Test
+    fun testTaskApprovalGate_doesNotFalselyFlagShoppingAsPinCredential() {
+        val gate = TaskApprovalGate()
+        val plan = gate.proposePlan(
+            rawTask = "Add shopping list to Keep notes",
+            resolvedPackage = "com.google.android.keep",
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Type shopping items",
+                    actionType = "TYPE",
+                    target = "shopping_list_edit_text"
+                )
+            )
+        )
+
+        assertFalse("Shopping should not trigger elevated confirmation", plan.requiresElevatedConfirmation)
+        assertEquals(RiskLevel.LOW, plan.steps[0].riskLevel)
+
+        // Contrast with actual PIN change
+        val pinPlan = gate.proposePlan(
+            rawTask = "Change lockscreen PIN",
+            resolvedPackage = "com.android.settings",
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Enter new PIN code",
+                    actionType = "TYPE",
+                    target = "pin_input_field"
+                )
+            )
+        )
+        assertTrue("Actual PIN change must trigger elevated confirmation", pinPlan.requiresElevatedConfirmation)
+        assertEquals(RiskLevel.HIGH, pinPlan.steps[0].riskLevel)
+    }
 }

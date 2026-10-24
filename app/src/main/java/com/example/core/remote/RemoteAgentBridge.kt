@@ -25,6 +25,8 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
 
 /**
@@ -43,20 +45,21 @@ data class RemoteControlTelemetry(
     val localIpAddress: String = "127.0.0.1",
     val activeConnectionsCount: Int = 0,
     val totalDirectivesProcessed: Int = 0,
-    val pairingToken: String = "JARVIS-SECURE-9942",
+    val pairingToken: String = "",
     val lastRemoteCommand: String? = null,
     val lastCommandStatus: String? = null
 )
 
 /**
- * Embedded Lightweight Remote Control Server for LocalAgent.
+ * Hardened Embedded Lightweight Remote Control Server for LocalAgent.
  *
- * Capabilities:
- * 1. Operates over local Wi-Fi or USB adb port-forwarding (adb forward tcp:8080 tcp:8080).
- * 2. Serves embedded interactive HTML5 Web Console on GET / for zero-install remote supervision.
- * 3. Processes remote execution requests, returns live status and UI snapshots.
- * 4. Enforces cryptographic pairing token authentication.
- * 5. Strictly honors emergency kill-switch and resource budget (<2MB footprint).
+ * Security Protections Enforced:
+ * 1. Zero hardcoded tokens. Generates an ephemeral 6-digit cryptographic PIN via SecureRandom
+ *    on server startup, displayed ONLY on the physical device screen / local notification.
+ * 2. Constant-time token verification using MessageDigest.isEqual to prevent timing attacks.
+ * 3. Bounded request reader capped at MAX_REQUEST_BODY_BYTES (64KB) to prevent OOM on Helio P23.
+ * 4. Strict CORS policy: drops wildcard '*', only permits localhost/paired loopback origin.
+ * 5. Web Console on GET / never embeds authentication tokens in plaintext.
  */
 class RemoteAgentBridge(
     private val hardwareManager: HardwareManager,
@@ -64,7 +67,19 @@ class RemoteAgentBridge(
 ) {
     companion object {
         const val DEFAULT_PORT = 8080
-        private const val DEFAULT_TOKEN = "JARVIS-SECURE-9942"
+        const val MAX_REQUEST_BODY_BYTES = 65536 // 64 KB strict buffer cap
+
+        fun generateSecureSessionPin(): String {
+            val random = SecureRandom()
+            return String.format("%06d", random.nextInt(1_000_000))
+        }
+
+        fun constantTimeVerify(provided: String?, expected: String): Boolean {
+            if (provided.isNullOrBlank() || expected.isBlank()) return false
+            val a = provided.trim().toByteArray(Charsets.UTF_8)
+            val b = expected.trim().toByteArray(Charsets.UTF_8)
+            return MessageDigest.isEqual(a, b)
+        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -77,17 +92,23 @@ class RemoteAgentBridge(
      */
     var onExecuteDirective: (suspend (String) -> Unit)? = null
 
+    // Ephemeral pairing token generated dynamically per session - never shipped in code
+    private var activePairingPin: String = generateSecureSessionPin()
+    var onPinGeneratedListener: ((String) -> Unit)? = null
+
     private val _telemetry = MutableStateFlow(
         RemoteControlTelemetry(
             port = DEFAULT_PORT,
-            pairingToken = DEFAULT_TOKEN
+            pairingToken = activePairingPin
         )
     )
     val telemetry: StateFlow<RemoteControlTelemetry> = _telemetry.asStateFlow()
 
-    fun startServer(port: Int = DEFAULT_PORT, token: String = DEFAULT_TOKEN) {
-        if (isRunning) return
+    fun startServer(port: Int = DEFAULT_PORT, token: String? = null): String {
+        if (isRunning) return activePairingPin
+        activePairingPin = token ?: generateSecureSessionPin()
         isRunning = true
+        onPinGeneratedListener?.invoke(activePairingPin)
 
         scope.launch {
             try {
@@ -96,9 +117,9 @@ class RemoteAgentBridge(
                 _telemetry.value = _telemetry.value.copy(
                     isServerRunning = true,
                     port = port,
-                    pairingToken = token,
+                    pairingToken = activePairingPin,
                     localIpAddress = resolvedIp,
-                    lastCommandStatus = "Server listening on http://$resolvedIp:$port"
+                    lastCommandStatus = "Server listening on http://$resolvedIp:$port (Pairing PIN: $activePairingPin)"
                 )
 
                 while (isRunning) {
@@ -108,7 +129,7 @@ class RemoteAgentBridge(
                         null
                     } ?: break
 
-                    handleClient(clientSocket, token)
+                    handleClient(clientSocket, activePairingPin)
                 }
             } catch (e: Exception) {
                 _telemetry.value = _telemetry.value.copy(
@@ -119,6 +140,7 @@ class RemoteAgentBridge(
                 stopServer()
             }
         }
+        return activePairingPin
     }
 
     fun stopServer() {
@@ -141,56 +163,81 @@ class RemoteAgentBridge(
             )
 
             try {
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+                socket.soTimeout = 8000 // 8-second read timeout prevents hung socket starvation
+                val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
                 val writer = PrintWriter(socket.getOutputStream(), true)
 
-                var line = reader.readLine() ?: ""
+                val requestLine = reader.readLine() ?: return@launch
                 var authHeader: String? = null
                 var contentLength = 0
-                val requestLine = line
+                var originHeader: String? = null
+                var headerCount = 0
 
-                while (line.isNotEmpty()) {
+                var line: String? = reader.readLine()
+                while (!line.isNullOrEmpty()) {
+                    if (++headerCount > 64) {
+                        sendHttpResponse(writer, 431, "{\"error\":\"Request Header Fields Too Large\"}", originHeader)
+                        socket.close()
+                        return@launch
+                    }
                     if (line.startsWith("X-Agent-Auth-Token:", ignoreCase = true)) {
                         authHeader = line.substringAfter(":").trim()
                     } else if (line.startsWith("Authorization: Bearer", ignoreCase = true)) {
                         authHeader = line.substringAfter("Bearer").trim()
                     } else if (line.startsWith("Content-Length:", ignoreCase = true)) {
                         contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                    } else if (line.startsWith("Origin:", ignoreCase = true)) {
+                        originHeader = line.substringAfter(":").trim()
                     }
-                    line = reader.readLine() ?: ""
+                    line = reader.readLine()
                 }
 
                 // Handle CORS preflight
                 if (requestLine.startsWith("OPTIONS")) {
-                    sendCorsPreflightResponse(writer)
+                    sendCorsPreflightResponse(writer, originHeader)
                     socket.close()
                     return@launch
                 }
 
-                // Serve Embedded Web Dashboard on root GET
+                // Serve Embedded Web Dashboard on root GET (Never leak token in HTML)
                 if (requestLine.startsWith("GET / ") || requestLine.startsWith("GET /index.html")) {
-                    sendHtmlResponse(writer, 200, buildWebConsoleHtml(expectedToken))
+                    sendHtmlResponse(writer, 200, buildWebConsoleHtml())
                     socket.close()
                     return@launch
                 }
 
-                // Security Check for API endpoints
+                // Security Check for API endpoints using constant-time comparison
                 val requiresAuth = requestLine.startsWith("POST /api/") || requestLine.startsWith("GET /api/remote/snapshot")
-                if (requiresAuth && authHeader != expectedToken) {
+                if (requiresAuth && !constantTimeVerify(authHeader, expectedToken)) {
                     val errorJson = JSONObject().apply {
-                        put("error", "Unauthorized: Invalid or missing X-Agent-Auth-Token")
+                        put("error", "Unauthorized: Invalid or missing pairing PIN. Please enter the 6-digit code shown on the Android device screen.")
                         put("code", 401)
                     }
-                    sendHttpResponse(writer, 401, errorJson.toString())
+                    sendHttpResponse(writer, 401, errorJson.toString(), originHeader)
                     socket.close()
                     return@launch
                 }
 
-                // Read Body if POST
+                // Safe bounded body reader (MAX_REQUEST_BODY_BYTES = 64KB cap)
+                if (contentLength > MAX_REQUEST_BODY_BYTES) {
+                    val errJson = JSONObject().apply {
+                        put("error", "Payload Too Large: Content length ($contentLength bytes) exceeds 64KB Helio P23 memory cap")
+                        put("code", 413)
+                    }
+                    sendHttpResponse(writer, 413, errJson.toString(), originHeader)
+                    socket.close()
+                    return@launch
+                }
+
                 val body = if (contentLength > 0) {
                     val buffer = CharArray(contentLength)
-                    reader.read(buffer, 0, contentLength)
-                    String(buffer)
+                    var readTotal = 0
+                    while (readTotal < contentLength) {
+                        val read = reader.read(buffer, readTotal, contentLength - readTotal)
+                        if (read == -1) break
+                        readTotal += read
+                    }
+                    String(buffer, 0, readTotal)
                 } else ""
 
                 // Route Request
@@ -207,6 +254,7 @@ class RemoteAgentBridge(
                         put("status", "ok")
                         put("message", "LocalAgent J.A.R.V.I.S. Remote Control Bridge online")
                         put("webConsole", "Open http://${_telemetry.value.localIpAddress}:${_telemetry.value.port}/ in browser")
+                        put("security", "Pairing PIN required on all mutations. Wildcard CORS disabled. 64KB buffer cap active.")
                         put("endpoints", JSONArray(listOf(
                             "/api/remote/status",
                             "/api/remote/execute",
@@ -220,7 +268,7 @@ class RemoteAgentBridge(
                     }
                 }
 
-                sendHttpResponse(writer, 200, responseJson.toString())
+                sendHttpResponse(writer, 200, responseJson.toString(), originHeader)
             } catch (_: Exception) {
             } finally {
                 try { socket.close() } catch (_: Exception) {}
@@ -243,6 +291,7 @@ class RemoteAgentBridge(
         root.put("flashlightActive", hardwareManager.isTorchEnabled.value)
         root.put("totalDirectivesProcessed", _telemetry.value.totalDirectivesProcessed)
         root.put("timestampMs", System.currentTimeMillis())
+        root.put("bufferCapBytes", MAX_REQUEST_BODY_BYTES)
         return root
     }
 
@@ -278,80 +327,66 @@ class RemoteAgentBridge(
         }
     }
 
-    private fun handleExecuteRequest(body: String): JSONObject {
+    private suspend fun handleExecuteRequest(body: String): JSONObject {
         val bodyJson = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
         val prompt = bodyJson.optString("prompt", "").trim()
 
         if (prompt.isEmpty()) {
             return JSONObject().apply {
                 put("success", false)
-                put("error", "Missing 'prompt' parameter in request body")
+                put("error", "Empty prompt provided")
             }
         }
 
-        val parsedCommands = parser.parse(prompt)
         _telemetry.value = _telemetry.value.copy(
             totalDirectivesProcessed = _telemetry.value.totalDirectivesProcessed + 1,
             lastRemoteCommand = prompt,
-            lastCommandStatus = "EXECUTING (${parsedCommands.size} steps)"
+            lastCommandStatus = "DISPATCHING"
         )
 
-        // Dispatch directive to execution engine via callback
-        onExecuteDirective?.let { handler ->
-            scope.launch {
-                try {
-                    handler.invoke(prompt)
-                } catch (_: Exception) {}
+        val callback = onExecuteDirective
+        return if (callback != null) {
+            callback.invoke(prompt)
+            JSONObject().apply {
+                put("success", true)
+                put("action", "DISPATCHED_TO_ENGINE")
+                put("prompt", prompt)
             }
-        }
-
-        val commandsArray = JSONArray()
-        for (cmd in parsedCommands) {
-            val cmdObj = JSONObject().apply {
-                put("id", cmd.id)
-                put("displayName", cmd.displayName)
+        } else {
+            val parsed = parser.parse(prompt)
+            JSONObject().apply {
+                put("success", true)
+                put("action", "PARSED_LOCAL")
+                put("commandsCount", parsed.size)
+                put("commands", JSONArray(parsed.map { it.displayName }))
             }
-            commandsArray.put(cmdObj)
-        }
-
-        return JSONObject().apply {
-            put("success", true)
-            put("receivedPrompt", prompt)
-            put("resolvedCommandsCount", parsedCommands.size)
-            put("commands", commandsArray)
-            put("executionStatus", "DISPATCHED_TO_EXECUTION_ENGINE")
         }
     }
 
     private fun handleFlashlightRequest(body: String): JSONObject {
         val bodyJson = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
-        val targetStr = bodyJson.optString("target", "BACK").uppercase()
-        val durationSeconds = bodyJson.optInt("durationSeconds", 60)
+        val target = bodyJson.optString("target", "BACK")
         val enable = bodyJson.optBoolean("enable", true)
+        val duration = bodyJson.optInt("durationSeconds", 30)
 
-        val target = when (targetStr) {
+        val flashTarget = when (target.uppercase()) {
             "FRONT" -> FlashlightTarget.FRONT
             "DUAL" -> FlashlightTarget.DUAL
             else -> FlashlightTarget.BACK
         }
 
-        if (enable && durationSeconds > 0) {
-            hardwareManager.turnTorchTimed(target, durationSeconds)
-        } else {
-            hardwareManager.turnTorch(target, enable)
-        }
-
+        val success = hardwareManager.setFlashlight(flashTarget, enable, duration)
         _telemetry.value = _telemetry.value.copy(
             totalDirectivesProcessed = _telemetry.value.totalDirectivesProcessed + 1,
-            lastRemoteCommand = "Flashlight $targetStr ($durationSeconds s)",
-            lastCommandStatus = if (enable) "ACTIVE" else "OFF"
+            lastRemoteCommand = "FLASHLIGHT $target $enable (${duration}s)",
+            lastCommandStatus = if (success) "SUCCESS" else "FAILED"
         )
 
         return JSONObject().apply {
-            put("success", true)
-            put("target", target.label)
-            put("durationSeconds", durationSeconds)
-            put("state", if (enable) "ACTIVE" else "OFF")
+            put("success", success)
+            put("target", target)
+            put("enabled", enable)
+            put("durationSeconds", duration)
         }
     }
 
@@ -361,10 +396,10 @@ class RemoteAgentBridge(
         val service = LocalAgentAccessibilityService.instance
 
         val success = when (action) {
-            "BACK" -> service?.dispatchBack() == true
-            "HOME" -> service?.dispatchHome() == true
-            "RECENTS" -> service?.dispatchRecents() == true
-            "NOTIFICATIONS" -> service?.dispatchNotifications() == true
+            "BACK" -> service?.dispatchGlobalBack() ?: false
+            "HOME" -> service?.dispatchGlobalHome() ?: false
+            "RECENTS" -> service?.dispatchGlobalRecents() ?: false
+            "NOTIFICATIONS" -> service?.dispatchGlobalNotifications() ?: false
             else -> false
         }
 
@@ -425,13 +460,22 @@ class RemoteAgentBridge(
         }
     }
 
-    private fun sendHttpResponse(writer: PrintWriter, statusCode: Int, body: String) {
-        val statusText = if (statusCode == 200) "OK" else if (statusCode == 401) "Unauthorized" else "Error"
+    private fun resolveAllowedOrigin(clientOrigin: String?): String {
+        return if (clientOrigin != null && (clientOrigin.startsWith("http://localhost") || clientOrigin.startsWith("http://127.0.0.1"))) {
+            clientOrigin
+        } else {
+            "http://localhost:${_telemetry.value.port}"
+        }
+    }
+
+    private fun sendHttpResponse(writer: PrintWriter, statusCode: Int, body: String, origin: String?) {
+        val statusText = if (statusCode == 200) "OK" else if (statusCode == 401) "Unauthorized" else if (statusCode == 413) "Payload Too Large" else "Error"
+        val allowedOrigin = resolveAllowedOrigin(origin)
         writer.println("HTTP/1.1 $statusCode $statusText")
         writer.println("Content-Type: application/json; charset=utf-8")
         writer.println("Content-Length: ${body.toByteArray().size}")
-        writer.println("Access-Control-Allow-Origin: *")
-        writer.println("Access-Control-Allow-Headers: *")
+        writer.println("Access-Control-Allow-Origin: $allowedOrigin")
+        writer.println("Access-Control-Allow-Headers: X-Agent-Auth-Token, Authorization, Content-Type")
         writer.println("Access-Control-Allow-Methods: GET, POST, OPTIONS")
         writer.println("Connection: close")
         writer.println()
@@ -449,10 +493,11 @@ class RemoteAgentBridge(
         writer.flush()
     }
 
-    private fun sendCorsPreflightResponse(writer: PrintWriter) {
+    private fun sendCorsPreflightResponse(writer: PrintWriter, origin: String?) {
+        val allowedOrigin = resolveAllowedOrigin(origin)
         writer.println("HTTP/1.1 204 No Content")
-        writer.println("Access-Control-Allow-Origin: *")
-        writer.println("Access-Control-Allow-Headers: *")
+        writer.println("Access-Control-Allow-Origin: $allowedOrigin")
+        writer.println("Access-Control-Allow-Headers: X-Agent-Auth-Token, Authorization, Content-Type")
         writer.println("Access-Control-Allow-Methods: GET, POST, OPTIONS")
         writer.println("Connection: close")
         writer.println()
@@ -480,7 +525,7 @@ class RemoteAgentBridge(
         return "127.0.0.1" // Fallback to loopback / adb forward
     }
 
-    private fun buildWebConsoleHtml(token: String): String {
+    private fun buildWebConsoleHtml(): String {
         return """
 <!DOCTYPE html>
 <html lang="en">
@@ -498,43 +543,54 @@ class RemoteAgentBridge(
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: #131b2e; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; }
   .card h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px; }
-  .card .val { font-size: 1.1rem; font-weight: bold; color: #f8fafc; }
+  .card p { font-size: 1.1rem; font-weight: bold; color: #e2e8f0; }
   .panel { background: #131b2e; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-  .panel h2 { font-size: 1rem; color: #f8fafc; margin-bottom: 12px; display: flex; justify-content: space-between; }
-  .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
-  input[type="text"] { flex: 1; background: #0b0f19; border: 1px solid #334155; color: #fff; padding: 10px 12px; border-radius: 6px; font-size: 0.9rem; }
-  button { background: #0284c7; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+  .panel h2 { font-size: 1rem; color: #94a3b8; margin-bottom: 12px; }
+  .input-group { display: flex; gap: 8px; }
+  input[type="text"], input[type="password"] { flex: 1; background: #0b0f19; border: 1px solid #334155; color: #f8fafc; padding: 10px 14px; border-radius: 6px; font-size: 0.9rem; }
+  input:focus { outline: none; border-color: #38bdf8; }
+  button { background: #0284c7; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
   button:hover { background: #0369a1; }
   button.danger { background: #dc2626; }
   button.danger:hover { background: #b91c1c; }
   button.sec { background: #334155; }
   button.sec:hover { background: #475569; }
-  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .log-box { background: #060911; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; font-size: 0.8rem; color: #38bdf8; max-height: 160px; overflow-y: auto; white-space: pre-wrap; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .log-box { background: #000; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.8rem; color: #38bdf8; min-height: 120px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <header>
-  <h1><span>⚡</span> LocalAgent J.A.R.V.I.S. Remote</h1>
-  <span id="connBadge" class="badge badge-live">ONLINE</span>
+  <h1><span>🛡️</span> J.A.R.V.I.S. Local Control</h1>
+  <div id="connBadge" class="badge badge-live">ONLINE</div>
 </header>
+
+<div class="panel" style="border: 1px solid #0284c7;">
+  <h2 style="color: #38bdf8;">Device Pairing & Authorization</h2>
+  <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px;">Enter the 6-digit dynamic PIN currently shown on the phone screen / notification:</p>
+  <div class="input-group">
+    <input type="password" id="authTokenInput" placeholder="Enter 6-digit Device PIN" maxlength="32" />
+    <button onclick="savePin()">Set PIN</button>
+  </div>
+  <div id="authStatusText" style="font-size: 0.75rem; color: #f59e0b; margin-top: 6px;">PIN is stored in local browser memory only.</div>
+</div>
 
 <div class="grid">
   <div class="card">
     <h3>Foreground Package</h3>
-    <div id="fgPkg" class="val">Loading...</div>
+    <p id="fgPkg">Standby</p>
   </div>
   <div class="card">
-    <h3>Battery / Power</h3>
-    <div id="batteryVal" class="val">-- %</div>
+    <h3>Battery</h3>
+    <p id="batteryVal">--%</p>
   </div>
   <div class="card">
     <h3>Heap Memory</h3>
-    <div id="heapVal" class="val">-- MB</div>
+    <p id="heapVal">-- MB</p>
   </div>
   <div class="card">
-    <h3>Accessibility Service</h3>
-    <div id="accVal" class="val">--</div>
+    <h3>Accessibility Core</h3>
+    <p id="accVal">--</p>
   </div>
 </div>
 
@@ -574,7 +630,27 @@ class RemoteAgentBridge(
 </div>
 
 <script>
-const TOKEN = '$token';
+function getPin() {
+  return document.getElementById('authTokenInput').value.trim() || sessionStorage.getItem('agent_pin') || '';
+}
+
+function savePin() {
+  const pin = document.getElementById('authTokenInput').value.trim();
+  if (pin) {
+    sessionStorage.setItem('agent_pin', pin);
+    document.getElementById('authStatusText').innerText = 'PIN configured for session requests.';
+    document.getElementById('authStatusText').style.color = '#22c55e';
+    log('Authentication PIN configured.');
+  }
+}
+
+// Restore cached session PIN if present
+const cachedPin = sessionStorage.getItem('agent_pin');
+if (cachedPin) {
+  document.getElementById('authTokenInput').value = cachedPin;
+  document.getElementById('authStatusText').innerText = 'PIN active from current browser session.';
+  document.getElementById('authStatusText').style.color = '#22c55e';
+}
 
 function log(msg) {
   const box = document.getElementById('consoleLog');
@@ -603,13 +679,18 @@ async function fetchStatus() {
 async function dispatchExecute() {
   const prompt = document.getElementById('directivePrompt').value;
   if (!prompt) return;
+  const pin = getPin();
+  if (!pin) {
+    alert('Please enter the 6-digit Device Pairing PIN before executing directives.');
+    return;
+  }
   log('Dispatching directive: ' + prompt);
   try {
     const res = await fetch('/api/remote/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Agent-Auth-Token': TOKEN
+        'X-Agent-Auth-Token': pin
       },
       body: JSON.stringify({ prompt })
     });
@@ -622,10 +703,11 @@ async function dispatchExecute() {
 
 async function dispatchAbort() {
   log('🚨 INITIATING EMERGENCY HALT...');
+  const pin = getPin();
   try {
     const res = await fetch('/api/remote/abort', {
       method: 'POST',
-      headers: { 'X-Agent-Auth-Token': TOKEN }
+      headers: { 'X-Agent-Auth-Token': pin }
     });
     const data = await res.json();
     log('Abort status: ' + data.message);
@@ -636,10 +718,11 @@ async function dispatchAbort() {
 
 async function dispatchNav(action) {
   log('Navigating: ' + action);
+  const pin = getPin();
   try {
     const res = await fetch('/api/remote/navigate', {
       method: 'POST',
-      headers: { 'X-Agent-Auth-Token': TOKEN, 'Content-Type': 'application/json' },
+      headers: { 'X-Agent-Auth-Token': pin, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action })
     });
     const data = await res.json();
@@ -651,10 +734,11 @@ async function dispatchNav(action) {
 
 async function dispatchFlashlight(target, enable) {
   log(`Flashlight ${'$'}{target} -> ${'$'}{enable}`);
+  const pin = getPin();
   try {
     const res = await fetch('/api/remote/flashlight', {
       method: 'POST',
-      headers: { 'X-Agent-Auth-Token': TOKEN, 'Content-Type': 'application/json' },
+      headers: { 'X-Agent-Auth-Token': pin, 'Content-Type': 'application/json' },
       body: JSON.stringify({ target, enable, durationSeconds: 30 })
     });
     const data = await res.json();
@@ -666,9 +750,10 @@ async function dispatchFlashlight(target, enable) {
 
 async function dispatchSnapshot() {
   log('Capturing UI tree snapshot...');
+  const pin = getPin();
   try {
     const res = await fetch('/api/remote/snapshot', {
-      headers: { 'X-Agent-Auth-Token': TOKEN }
+      headers: { 'X-Agent-Auth-Token': pin }
     });
     const data = await res.json();
     log('Snapshot: ' + JSON.stringify(data, null, 2));
