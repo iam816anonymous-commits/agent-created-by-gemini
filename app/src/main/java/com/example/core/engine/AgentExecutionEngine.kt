@@ -56,7 +56,7 @@ class AgentExecutionEngine(
     private val verifier: StepVerifier = StepVerifier(),
     val actuatorController: com.example.core.actuator.ActuatorController = com.example.core.actuator.ActuatorController(context),
     val webResearchEngine: com.example.core.research.WebResearchEngine = com.example.core.research.WebResearchEngine(),
-    val recoveryEngine: AutonomousRecoveryEngine = AutonomousRecoveryEngine(webResearchEngine),
+    val recoveryEngine: AutonomousRecoveryEngine = AutonomousRecoveryEngine(),
     val cognitiveBrain: CognitiveBrainEngine = CognitiveBrainEngine(),
     val memoryBudgetManager: com.example.core.memory.MemoryBudgetManager = com.example.core.memory.MemoryBudgetManager(context)
 ) {
@@ -561,11 +561,27 @@ class AgentExecutionEngine(
             }
 
             is TaskCommand.WebResearch -> {
-                _state.update { it.copy(status = ExecutionStatus.EXECUTING_ACTION, statusMessage = "Scraping & researching web intelligence: ${command.query}...") }
+                _state.update { it.copy(status = ExecutionStatus.EXECUTING_ACTION, statusMessage = "Querying live web intelligence: ${command.query}...") }
                 actionDispatchTime = System.currentTimeMillis()
                 val researchResult = webResearchEngine.conductResearch(command.query, command.extractType)
                 _state.update { it.copy(scrapedResearchResult = researchResult) }
-                dispatchedActionDesc = "Scraped ${researchResult.extractedCount} verified items for '${command.query}': ${researchResult.rawSummary}"
+
+                if (researchResult.isFailure) {
+                    dispatchedActionDesc = "Web research failed: ${researchResult.rawSummary}"
+                    return StepExecutionRecord(
+                        stepIndex = stepIndex,
+                        commandSummary = command.displayName,
+                        targetSelector = extractTargetSelectorDesc(command),
+                        dispatchedAction = dispatchedActionDesc,
+                        preSnapshotId = preSnapshot?.id,
+                        postSnapshotId = null,
+                        status = StepStatus.FAILURE,
+                        verificationDetails = researchResult.rawSummary,
+                        durationMs = System.currentTimeMillis() - stepStartTime
+                    )
+                }
+
+                dispatchedActionDesc = "Retrieved ${researchResult.extractedCount} live search items for '${command.query}': ${researchResult.rawSummary}"
 
                 // Also launch web browser if user asked to open google or search
                 try {

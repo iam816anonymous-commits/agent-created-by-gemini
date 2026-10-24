@@ -68,6 +68,9 @@ class RemoteAgentBridge(
     companion object {
         const val DEFAULT_PORT = 8080
         const val MAX_REQUEST_BODY_BYTES = 65536 // 64 KB strict buffer cap
+        const val MAX_FAILED_PIN_ATTEMPTS = 5
+        const val LOCKOUT_DURATION_MS = 5 * 60 * 1000L // 5 minutes lockout after 5 failed tries
+        const val MAX_HEADER_LINE_LENGTH = 4096 // 4 KB max per header line
 
         fun generateSecureSessionPin(): String {
             val random = SecureRandom()
@@ -86,6 +89,46 @@ class RemoteAgentBridge(
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
 
+    // Brute-force protection state
+    @Volatile private var failedAttemptsCount = 0
+    @Volatile private var lockoutUntilMs = 0L
+
+    fun isLockedOut(): Boolean = System.currentTimeMillis() < lockoutUntilMs
+
+    fun getRemainingLockoutSeconds(): Long = ((lockoutUntilMs - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+
+    private fun recordFailedAttempt() {
+        failedAttemptsCount++
+        if (failedAttemptsCount >= MAX_FAILED_PIN_ATTEMPTS) {
+            lockoutUntilMs = System.currentTimeMillis() + LOCKOUT_DURATION_MS
+            failedAttemptsCount = 0
+        }
+    }
+
+    private fun recordSuccessfulAttempt() {
+        failedAttemptsCount = 0
+        lockoutUntilMs = 0L
+    }
+
+    /**
+     * Bounded header line reader preventing unbounded memory allocation from malicious streams.
+     */
+    private fun readBoundedLine(reader: BufferedReader, maxLen: Int = MAX_HEADER_LINE_LENGTH): String? {
+        val sb = StringBuilder()
+        var charCode: Int
+        while (reader.read().also { charCode = it } != -1) {
+            val ch = charCode.toChar()
+            if (ch == '\n') break
+            if (ch != '\r') {
+                if (sb.length >= maxLen) {
+                    throw IllegalArgumentException("Header line exceeds maximum length of $maxLen characters")
+                }
+                sb.append(ch)
+            }
+        }
+        return if (charCode == -1 && sb.isEmpty()) null else sb.toString()
+    }
+
     /**
      * Optional execution callback invoked when a remote directive is received.
      * Connects directly to AgentExecutionEngine / AgentViewModel.
@@ -99,27 +142,33 @@ class RemoteAgentBridge(
     private val _telemetry = MutableStateFlow(
         RemoteControlTelemetry(
             port = DEFAULT_PORT,
-            pairingToken = activePairingPin
+            pairingToken = "******" // Never expose raw token in public telemetry
         )
     )
     val telemetry: StateFlow<RemoteControlTelemetry> = _telemetry.asStateFlow()
 
-    fun startServer(port: Int = DEFAULT_PORT, token: String? = null): String {
+    fun startServer(port: Int = DEFAULT_PORT, token: String? = null, loopbackOnly: Boolean = true): String {
         if (isRunning) return activePairingPin
         activePairingPin = token ?: generateSecureSessionPin()
         isRunning = true
+        failedAttemptsCount = 0
+        lockoutUntilMs = 0L
         onPinGeneratedListener?.invoke(activePairingPin)
 
         scope.launch {
             try {
-                serverSocket = ServerSocket(port)
-                val resolvedIp = getLocalIpAddress()
+                serverSocket = if (loopbackOnly) {
+                    ServerSocket(port, 50, java.net.InetAddress.getByName("127.0.0.1"))
+                } else {
+                    ServerSocket(port)
+                }
+                val resolvedIp = if (loopbackOnly) "127.0.0.1" else getLocalIpAddress()
                 _telemetry.value = _telemetry.value.copy(
                     isServerRunning = true,
                     port = port,
-                    pairingToken = activePairingPin,
+                    pairingToken = "******",
                     localIpAddress = resolvedIp,
-                    lastCommandStatus = "Server listening on http://$resolvedIp:$port (Pairing PIN: $activePairingPin)"
+                    lastCommandStatus = "Server listening on http://$resolvedIp:$port (Pair via adb forward tcp:$port tcp:$port)"
                 )
 
                 while (isRunning) {
@@ -167,29 +216,42 @@ class RemoteAgentBridge(
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
                 val writer = PrintWriter(socket.getOutputStream(), true)
 
-                val requestLine = reader.readLine() ?: return@launch
+                val requestLine = try {
+                    readBoundedLine(reader)
+                } catch (_: Exception) {
+                    sendHttpResponse(writer, 431, "{\"error\":\"Request Line Too Large\"}", null)
+                    socket.close()
+                    return@launch
+                } ?: return@launch
+
                 var authHeader: String? = null
                 var contentLength = 0
                 var originHeader: String? = null
                 var headerCount = 0
 
-                var line: String? = reader.readLine()
-                while (!line.isNullOrEmpty()) {
-                    if (++headerCount > 64) {
-                        sendHttpResponse(writer, 431, "{\"error\":\"Request Header Fields Too Large\"}", originHeader)
-                        socket.close()
-                        return@launch
+                try {
+                    var line: String? = readBoundedLine(reader)
+                    while (!line.isNullOrEmpty()) {
+                        if (++headerCount > 64) {
+                            sendHttpResponse(writer, 431, "{\"error\":\"Request Header Fields Too Large\"}", originHeader)
+                            socket.close()
+                            return@launch
+                        }
+                        if (line.startsWith("X-Agent-Auth-Token:", ignoreCase = true)) {
+                            authHeader = line.substringAfter(":").trim()
+                        } else if (line.startsWith("Authorization: Bearer", ignoreCase = true)) {
+                            authHeader = line.substringAfter("Bearer").trim()
+                        } else if (line.startsWith("Content-Length:", ignoreCase = true)) {
+                            contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                        } else if (line.startsWith("Origin:", ignoreCase = true)) {
+                            originHeader = line.substringAfter(":").trim()
+                        }
+                        line = readBoundedLine(reader)
                     }
-                    if (line.startsWith("X-Agent-Auth-Token:", ignoreCase = true)) {
-                        authHeader = line.substringAfter(":").trim()
-                    } else if (line.startsWith("Authorization: Bearer", ignoreCase = true)) {
-                        authHeader = line.substringAfter("Bearer").trim()
-                    } else if (line.startsWith("Content-Length:", ignoreCase = true)) {
-                        contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
-                    } else if (line.startsWith("Origin:", ignoreCase = true)) {
-                        originHeader = line.substringAfter(":").trim()
-                    }
-                    line = reader.readLine()
+                } catch (e: Exception) {
+                    sendHttpResponse(writer, 431, "{\"error\":\"Header line exceeds limit\"}", originHeader)
+                    socket.close()
+                    return@launch
                 }
 
                 // Handle CORS preflight
@@ -206,16 +268,36 @@ class RemoteAgentBridge(
                     return@launch
                 }
 
-                // Security Check for API endpoints using constant-time comparison
+                // Security Check for API endpoints using constant-time comparison and lockout guard
                 val requiresAuth = requestLine.startsWith("POST /api/") || requestLine.startsWith("GET /api/remote/snapshot")
-                if (requiresAuth && !constantTimeVerify(authHeader, expectedToken)) {
-                    val errorJson = JSONObject().apply {
-                        put("error", "Unauthorized: Invalid or missing pairing PIN. Please enter the 6-digit code shown on the Android device screen.")
-                        put("code", 401)
+                if (requiresAuth) {
+                    if (isLockedOut()) {
+                        val remSec = getRemainingLockoutSeconds()
+                        val errJson = JSONObject().apply {
+                            put("error", "Too Many Requests: Brute-force lockout active. Try again in ${remSec}s.")
+                            put("code", 429)
+                            put("retryAfterSeconds", remSec)
+                        }
+                        sendHttpResponse(writer, 429, errJson.toString(), originHeader)
+                        socket.close()
+                        return@launch
                     }
-                    sendHttpResponse(writer, 401, errorJson.toString(), originHeader)
-                    socket.close()
-                    return@launch
+
+                    if (!constantTimeVerify(authHeader, expectedToken)) {
+                        recordFailedAttempt()
+                        val remAttempts = (MAX_FAILED_PIN_ATTEMPTS - failedAttemptsCount).coerceAtLeast(0)
+                        val errorJson = JSONObject().apply {
+                            put("error", "Unauthorized: Invalid or missing pairing PIN. Please enter the 6-digit code shown on the Android device screen. Remaining attempts: $remAttempts.")
+                            put("code", 401)
+                            put("remainingAttempts", remAttempts)
+                        }
+                        sendHttpResponse(writer, 401, errorJson.toString(), originHeader)
+                        socket.close()
+                        return@launch
+                    }
+
+                    // Successful PIN authentication
+                    recordSuccessfulAttempt()
                 }
 
                 // Safe bounded body reader (MAX_REQUEST_BODY_BYTES = 64KB cap)
@@ -460,16 +542,32 @@ class RemoteAgentBridge(
         }
     }
 
+    fun isOriginAllowed(clientOrigin: String?): Boolean {
+        if (clientOrigin.isNullOrBlank()) return false
+        val uri = try { java.net.URI(clientOrigin) } catch (_: Exception) { return false }
+        val scheme = uri.scheme?.lowercase() ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        val host = uri.host?.lowercase() ?: return false
+        return host == "localhost" || host == "127.0.0.1"
+    }
+
     private fun resolveAllowedOrigin(clientOrigin: String?): String {
-        return if (clientOrigin != null && (clientOrigin.startsWith("http://localhost") || clientOrigin.startsWith("http://127.0.0.1"))) {
-            clientOrigin
+        return if (isOriginAllowed(clientOrigin)) {
+            clientOrigin!!
         } else {
-            "http://localhost:${_telemetry.value.port}"
+            "http://127.0.0.1:${_telemetry.value.port}"
         }
     }
 
     private fun sendHttpResponse(writer: PrintWriter, statusCode: Int, body: String, origin: String?) {
-        val statusText = if (statusCode == 200) "OK" else if (statusCode == 401) "Unauthorized" else if (statusCode == 413) "Payload Too Large" else "Error"
+        val statusText = when (statusCode) {
+            200 -> "OK"
+            401 -> "Unauthorized"
+            413 -> "Payload Too Large"
+            429 -> "Too Many Requests"
+            431 -> "Request Header Fields Too Large"
+            else -> "Error"
+        }
         val allowedOrigin = resolveAllowedOrigin(origin)
         writer.println("HTTP/1.1 $statusCode $statusText")
         writer.println("Content-Type: application/json; charset=utf-8")

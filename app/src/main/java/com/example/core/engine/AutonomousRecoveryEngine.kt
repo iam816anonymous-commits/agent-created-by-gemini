@@ -23,9 +23,7 @@ data class AdaptedRecoveryPlan(
     val searchSummary: String
 )
 
-class AutonomousRecoveryEngine(
-    private val webResearchEngine: WebResearchEngine = WebResearchEngine()
-) {
+class AutonomousRecoveryEngine {
 
     suspend fun formulateRecoveryPlan(
         failedCommand: TaskCommand,
@@ -59,15 +57,7 @@ class AutonomousRecoveryEngine(
 
         val pkg = preSnapshot?.packageName ?: "target_app"
 
-        // 1. Autonomous Web Research Query
-        val query = "Android UI automation target '$targetDesc' failure '$failureReason' alternative strategy"
-        val researchResult = try {
-            webResearchEngine.conductResearch(query, extractType = "strategy_guide")
-        } catch (_: Exception) {
-            null
-        }
-
-        // 2. Derive Validated Strategy
+        // Derive Validated Strategy locally without leaking user UI text to external search engines
         val plan = when (failedCommand) {
             is TaskCommand.ClickElement -> {
                 // Check if preSnapshot has fuzzy text match or actionable ancestor
@@ -90,7 +80,7 @@ class AutonomousRecoveryEngine(
                                 requirementDescription = "Recovered interaction verified"
                             )
                         ),
-                        searchSummary = researchResult?.rawSummary ?: "Autonomous heuristic strategy synthesized."
+                        searchSummary = "Autonomous heuristic strategy synthesized locally."
                     )
                 } else {
                     // Strategy: Scroll down to reveal target, or use coordinate center tap
@@ -105,7 +95,7 @@ class AutonomousRecoveryEngine(
                                 targetLabel = targetDesc
                             )
                         ),
-                        searchSummary = researchResult?.rawSummary ?: "Screen viewport expansion strategy active."
+                        searchSummary = "Screen viewport expansion strategy active."
                     )
                 }
             }

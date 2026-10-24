@@ -210,25 +210,26 @@ enum class ActuatorType(val label: String) {
     DURABLE_VAULT_SYNC("External Shared Storage Brain Sync")
 }
 
-data class ScrapedMovieItem(
+data class SearchHit(
     val title: String,
-    val year: String,
-    val genre: String,
-    val directorOrCast: String,
-    val status: String,
-    val ratingOrNote: String
+    val url: String,
+    val snippet: String
 )
 
 data class ResearchScrapeResult(
     val query: String,
     val extractedCount: Int,
-    val movies: List<ScrapedMovieItem> = emptyList(),
+    val hits: List<SearchHit> = emptyList(),
     val rawSummary: String,
     val scrapedAtMs: Long = System.currentTimeMillis(),
     val isOnline: Boolean = true,
     val isFailure: Boolean = false,
-    val provenance: String = "LIVE_WEB_FETCH"
-)
+    val provenance: String = "LIVE_WEB_FETCH",
+    val cacheAgeSeconds: Long = 0L
+) {
+    // Backwards compatibility accessor
+    val movies: List<SearchHit> get() = hits
+}
 
 data class AgentSkill(
     val id: String = UUID.randomUUID().toString(),
