@@ -92,6 +92,8 @@ import { AgentCoreLoopStudio } from './components/AgentCoreLoopStudio';
 import { OfflineVectorAndWorkflowStudio } from './components/OfflineVectorAndWorkflowStudio';
 import { AndroidMultiVersionHub } from './components/AndroidMultiVersionHub';
 import { LlamaJniBridgeStudio } from './components/LlamaJniBridgeStudio';
+import { webTorchActuator, FlashlightWaveFormat } from './utils/webTorchActuator';
+import { probeLiveDeviceHardware, DynamicDeviceTelemetry } from './utils/dynamicDeviceProbe';
 
 // ==========================================
 // DOMAIN MODELS & SCHEMAS

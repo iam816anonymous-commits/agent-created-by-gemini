@@ -192,6 +192,7 @@ enum class ActuatorType(val label: String) {
     TORCH_TIMED("Timed Flashlight with Auto-Off"),
     TORCH_STROBE("Flashlight Strobe Pulse"),
     TORCH_SOS("Flashlight SOS Morse Code"),
+    TORCH_WAVE("Flashlight Waving Pulse Wave"),
     AUDIO_TONE("Audible Alert Chime"),
     AUDIO_VOLUME("Audio Volume Control"),
     SPEAKER_ALARM("High-Priority Alert Siren"),

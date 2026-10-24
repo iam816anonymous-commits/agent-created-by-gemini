@@ -28,8 +28,11 @@ import {
   CheckCircle,
   XCircle,
   Zap,
-  HardDrive
+  HardDrive,
+  Activity,
+  Radio
 } from 'lucide-react';
+import { probeLiveDeviceHardware, DynamicDeviceTelemetry } from '../utils/dynamicDeviceProbe';
 
 export interface DeviceHardwareProfile {
   id: string;
@@ -237,6 +240,21 @@ export function DeviceModelProfiler({
       setSelectedPresetId(propSelectedPresetId);
     }
   }, [propSelectedPresetId]);
+  const [dynamicProbe, setDynamicProbe] = useState<DynamicDeviceTelemetry | null>(null);
+  const [isProbingLive, setIsProbingLive] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsProbingLive(true);
+    probeLiveDeviceHardware().then(data => {
+      if (isMounted) {
+        setDynamicProbe(data);
+        setIsProbingLive(false);
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
+
   const [customRamMb, setCustomRamMb] = useState<number>(4096);
   const [customOsOverheadMb, setCustomOsOverheadMb] = useState<number>(1850);
   const [customAppBufferMb, setCustomAppBufferMb] = useState<number>(720);
@@ -339,7 +357,23 @@ export function DeviceModelProfiler({
     pageAlignmentSafe: boolean;
   } | null>(null);
 
-  const activePreset = DEVICE_PRESETS.find(p => p.id === selectedPresetId) || DEVICE_PRESETS[0];
+  const livePreset: DeviceHardwareProfile | null = dynamicProbe ? {
+    id: 'live_probed_device',
+    name: `[LIVE PROBE] ${dynamicProbe.deviceName}`,
+    socModel: dynamicProbe.gpuRenderer,
+    cpuArch: `${dynamicProbe.cpuCores}-core (${dynamicProbe.platform})`,
+    coreTopology: `${dynamicProbe.cpuCores} active execution threads`,
+    simdSupport: ['NEON', 'WebGL2', 'SIMD', 'WASM'],
+    totalRamMb: dynamicProbe.totalRamMb,
+    osOverheadMb: dynamicProbe.osOverheadMb,
+    activeAppBufferMb: dynamicProbe.activeAppBufferMb,
+    androidSdk: dynamicProbe.isMobile ? 27 : 34,
+    androidVersion: `${dynamicProbe.osName} ${dynamicProbe.osVersion}`,
+    pageSizeBytes: dynamicProbe.recommendedPageSize
+  } : null;
+
+  const allPresets = livePreset ? [livePreset, ...DEVICE_PRESETS] : DEVICE_PRESETS;
+  const activePreset = allPresets.find(p => p.id === selectedPresetId) || allPresets[0];
 
   // Dynamic Metrics Calculation
   const totalRam = isCustomMode ? customRamMb : activePreset.totalRamMb;
@@ -582,6 +616,77 @@ export function DeviceModelProfiler({
         </div>
       </div>
 
+      {/* Dynamic Hardware Live Probe Banner */}
+      {dynamicProbe && (
+        <div className="p-3.5 bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/40 border border-cyan-500/50 rounded-xl space-y-2.5 shadow-md shadow-cyan-950/30 font-mono text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-800/40 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold text-white uppercase text-[11px] flex items-center gap-1.5 flex-wrap">
+                <span>[ LIVE DYNAMIC HARDWARE DETECTED ]</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
+                  {dynamicProbe.deviceName}
+                </span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400">Probed: {dynamicProbe.probedAt}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (livePreset) {
+                    setSelectedPresetId(livePreset.id);
+                    setIsCustomMode(false);
+                    onSelectPreset?.(livePreset, dynamicProbe.recommendedTier);
+                  }
+                }}
+                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[10px] rounded-lg transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>APPLY RECOMMENDED SETUP</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+            <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
+              <div className="text-slate-500">PROBED RAM:</div>
+              <div className="text-cyan-300 font-bold">{dynamicProbe.totalRamMb} MB</div>
+              <div className="text-[9px] text-emerald-400">Safe Ceiling: {dynamicProbe.calculatedSafeCeilingMb} MB</div>
+            </div>
+
+            <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
+              <div className="text-slate-500">CPU TOPOLOGY:</div>
+              <div className="text-white font-bold">{dynamicProbe.cpuCores} Threads</div>
+              <div className="text-[9px] text-slate-400 truncate">{dynamicProbe.osName} {dynamicProbe.osVersion}</div>
+            </div>
+
+            <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
+              <div className="text-slate-500">GPU RENDERER:</div>
+              <div className="text-amber-300 font-bold truncate" title={dynamicProbe.gpuRenderer}>
+                {dynamicProbe.gpuRenderer.split(' (')[0]}
+              </div>
+              <div className="text-[9px] text-slate-400">WebGL Acceleration</div>
+            </div>
+
+            <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
+              <div className="text-slate-500">RECOMMENDED MODEL:</div>
+              <div className="text-emerald-300 font-bold truncate">{dynamicProbe.recommendedModelName.split(' (')[0]}</div>
+              <div className="text-[9px] text-cyan-400 font-bold">{dynamicProbe.recommendedTier} Escalation</div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-300 bg-black/40 p-2 rounded-lg border border-cyan-900/40 font-sans flex items-start gap-1.5">
+            <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+            <span><strong>Autonomous Recommendation:</strong> {dynamicProbe.recommendationRationale}</span>
+          </div>
+        </div>
+      )}
+
       {/* Preset Selector Strip */}
       <div className="p-3.5 bg-black border border-slate-900 rounded-xl space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
@@ -604,7 +709,7 @@ export function DeviceModelProfiler({
 
         {!isCustomMode ? (
           <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-            {DEVICE_PRESETS.map(preset => (
+            {allPresets.map(preset => (
               <button
                 key={preset.id}
                 onClick={() => {
@@ -1189,7 +1294,14 @@ export function DeviceModelProfiler({
               >
                 <div className="flex items-start justify-between gap-2 border-b border-slate-900 pb-2">
                   <div>
-                    <span className="text-white font-bold text-xs block">{candidate.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white font-bold text-xs">{candidate.name}</span>
+                      {candidate.id === dynamicProbe?.recommendedModelId && (
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-600 text-[8px] font-bold">
+                          DYNAMIC MATCH
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400">{candidate.parameterCount} &bull; {candidate.quantization}</span>
                   </div>
                   <span className={`text-[9px] px-2 py-0.5 rounded font-bold border ${

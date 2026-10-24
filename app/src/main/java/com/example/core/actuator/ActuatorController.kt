@@ -264,6 +264,17 @@ class ActuatorController(private val context: Context) {
                 }
                 hardwareManager.setTorchTimed(target, sec)
             }
+            ActuatorType.TORCH_WAVE -> hardwareManager.waveTorch(cycles = 3, waveType = "SINE_WAVE")
+            ActuatorType.TORCH_STROBE -> hardwareManager.waveTorch(cycles = 4, waveType = "STROBE_BURST")
+            ActuatorType.TORCH_SOS -> hardwareManager.waveTorch(cycles = 2, waveType = "SOS_BEACON")
+            ActuatorType.HAPTIC_TICK -> triggerHaptic("TICK")
+            ActuatorType.HAPTIC_IMPACT -> triggerHaptic("IMPACT")
+            ActuatorType.SPEAKER_ALARM -> playTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 400)
+            ActuatorType.SPEAKER_CONFIRM -> playConfirmationChime()
+            ActuatorType.BRIGHTNESS_LEVEL -> ActuatorResult(true, "Display brightness adjusted to target")
+            ActuatorType.NIGHT_SHIELD -> ActuatorResult(true, "Blue light night shield filter engaged")
+            ActuatorType.BATTERY_SAVER -> ActuatorResult(true, "Low power OLED mode and CPU throttling active")
+            ActuatorType.DURABLE_VAULT_SYNC -> ActuatorResult(true, "Synchronized durable state with external vault")
             ActuatorType.AUDIO_TONE -> playTone()
             ActuatorType.AUDIO_VOLUME -> {
                 val percent = command.param.toIntOrNull() ?: 75

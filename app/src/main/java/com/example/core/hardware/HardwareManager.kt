@@ -402,6 +402,104 @@ class HardwareManager(private val context: Context) : SensorEventListener {
         return setTorch(!_isTorchEnabled.value)
     }
 
+    /**
+     * Executes waving optical modulation across emitters.
+     * Supports SINE_WAVE, DUAL_ALTERNATING, STROBE_BURST, and SOS_BEACON.
+     */
+    fun waveTorch(
+        cycles: Int = 3,
+        waveType: String = "SINE_WAVE",
+        target: com.example.core.model.FlashlightTarget = com.example.core.model.FlashlightTarget.DUAL
+    ): ActuatorResult {
+        timedTorchJob?.cancel()
+        _isTorchEnabled.value = true
+
+        timedTorchJob = scope.launch {
+            try {
+                when (waveType.uppercase()) {
+                    "SINE_WAVE" -> {
+                        // Sinusoidal PWM waving
+                        for (cycle in 1..cycles) {
+                            val delays = listOf(20L, 40L, 80L, 140L, 200L, 140L, 80L, 40L, 20L)
+                            for (d in delays) {
+                                setTorch(true, target)
+                                kotlinx.coroutines.delay(d)
+                                setTorch(false, target)
+                                kotlinx.coroutines.delay((220L - d).coerceAtLeast(15L))
+                            }
+                        }
+                    }
+                    "DUAL_ALTERNATING" -> {
+                        // Alternating wave between rear and front emitters
+                        for (cycle in 1..cycles) {
+                            setTorch(true, com.example.core.model.FlashlightTarget.BACK)
+                            kotlinx.coroutines.delay(120L)
+                            setTorch(true, com.example.core.model.FlashlightTarget.DUAL)
+                            kotlinx.coroutines.delay(100L)
+                            setTorch(false, com.example.core.model.FlashlightTarget.BACK)
+                            setTorch(true, com.example.core.model.FlashlightTarget.FRONT)
+                            kotlinx.coroutines.delay(120L)
+                            setTorch(false, com.example.core.model.FlashlightTarget.FRONT)
+                            kotlinx.coroutines.delay(80L)
+                        }
+                    }
+                    "STROBE_BURST" -> {
+                        for (cycle in 1..cycles * 2) {
+                            setTorch(true, target)
+                            kotlinx.coroutines.delay(40L)
+                            setTorch(false, target)
+                            kotlinx.coroutines.delay(40L)
+                        }
+                    }
+                    else -> {
+                        // Default beacon pulse wave
+                        for (cycle in 1..cycles) {
+                            setTorch(true, target)
+                            kotlinx.coroutines.delay(150L)
+                            setTorch(false, target)
+                            kotlinx.coroutines.delay(150L)
+                        }
+                    }
+                }
+            } finally {
+                setTorch(false, target)
+                _isTorchEnabled.value = false
+            }
+        }
+
+        return ActuatorResult(
+            true,
+            "Flashlight waving sequence started ($waveType • $cycles cycles)",
+            "Dispatched fluid optical waving choreography"
+        )
+    }
+
+    /**
+     * Tiered Flashlight Brightness Strength (Android 13+ / API 33+ turnOnTorchWithStrengthLevel).
+     */
+    fun setTorchStrength(
+        level: Int,
+        target: com.example.core.model.FlashlightTarget = com.example.core.model.FlashlightTarget.BACK
+    ): ActuatorResult {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && cameraManager != null) {
+                val camId = if (target == com.example.core.model.FlashlightTarget.FRONT) frontCameraIdWithFlash ?: backCameraIdWithFlash else backCameraIdWithFlash
+                camId?.let { id ->
+                    val chars = cameraManager.getCameraCharacteristics(id)
+                    val maxLevel = chars.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL) ?: 1
+                    val clamped = level.coerceIn(1, maxLevel)
+                    cameraManager.turnOnTorchWithStrengthLevel(id, clamped)
+                    _isTorchEnabled.value = true
+                    ActuatorResult(true, "Torch strength level set to $clamped/$maxLevel on Camera $id")
+                } ?: ActuatorResult(false, "No compatible flashlight camera identified")
+            } else {
+                setTorch(level > 0, target)
+            }
+        } catch (e: Exception) {
+            ActuatorResult(false, "Torch strength adjustment failed: ${e.message}")
+        }
+    }
+
     fun playTone(toneType: Int = ToneGenerator.TONE_PROP_BEEP, durationMs: Int = 180): ActuatorResult {
         return try {
             val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
