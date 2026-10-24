@@ -268,8 +268,8 @@ class RemoteAgentBridge(
                     return@launch
                 }
 
-                // Security Check for API endpoints using constant-time comparison and lockout guard
-                val requiresAuth = requestLine.startsWith("POST /api/") || requestLine.startsWith("GET /api/remote/snapshot")
+                // Security Check for all API endpoints using constant-time comparison and lockout guard
+                val requiresAuth = requestLine.contains("/api/remote/")
                 if (requiresAuth) {
                     if (isLockedOut()) {
                         val remSec = getRemainingLockoutSeconds()

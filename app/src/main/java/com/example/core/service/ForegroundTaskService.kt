@@ -34,20 +34,24 @@ class ForegroundTaskService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!DynamicPermissionHandler.isPostNotificationsGranted(this)) {
-            Log.w(TAG, "POST_NOTIFICATIONS not granted. Cannot promote to foreground safely.")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
         val notification = buildForegroundNotification("Executing autonomous workflow in background...")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        // Android 8.0+ strictly enforces startForeground within 5 seconds of startForegroundService
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                startForeground(NOTIFICATION_ID, notification, types)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground error: ${e.message}", e)
+        }
+
+        if (!DynamicPermissionHandler.isPostNotificationsGranted(this)) {
+            Log.w(TAG, "POST_NOTIFICATIONS not granted. System will run foreground task with suppressed notification.")
         }
 
         wakeLock?.acquire(WAKELOCK_TIMEOUT_MS)

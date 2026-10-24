@@ -112,6 +112,16 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     private val resolver = TargetResolver()
     private val verifier = StepVerifier()
 
+    val intentRouter = com.example.core.intent.HierarchicalIntentRouter(
+        fastPathBackend = com.example.core.intent.DeterministicRulesBackend(parser),
+        localSlmBackend = com.example.core.intent.LocalSlmBackend(),
+        cloudGeminiBackend = com.example.core.intent.GeminiCloudBackend(
+            brainEngine = engine.cognitiveBrain
+        )
+    ).also {
+        engine.intentRouter = it
+    }
+
     private val _offlineDiagnostics = MutableStateFlow(OfflineDiagnosticResult())
     val offlineDiagnostics: StateFlow<OfflineDiagnosticResult> = _offlineDiagnostics.asStateFlow()
 

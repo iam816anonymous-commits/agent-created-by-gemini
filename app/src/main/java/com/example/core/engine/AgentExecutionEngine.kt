@@ -58,7 +58,9 @@ class AgentExecutionEngine(
     val webResearchEngine: com.example.core.research.WebResearchEngine = com.example.core.research.WebResearchEngine(),
     val recoveryEngine: AutonomousRecoveryEngine = AutonomousRecoveryEngine(),
     val cognitiveBrain: CognitiveBrainEngine = CognitiveBrainEngine(),
-    val memoryBudgetManager: com.example.core.memory.MemoryBudgetManager = com.example.core.memory.MemoryBudgetManager(context)
+    val memoryBudgetManager: com.example.core.memory.MemoryBudgetManager = com.example.core.memory.MemoryBudgetManager(context),
+    val approvalGate: com.example.core.approval.TaskApprovalGate = com.example.core.approval.TaskApprovalGate(),
+    var intentRouter: com.example.core.intent.HierarchicalIntentRouter? = null
 ) {
     private val engineScope = CoroutineScope(Dispatchers.Default)
     private var executionJob: Job? = null
@@ -179,12 +181,40 @@ class AgentExecutionEngine(
     ) {
         repository.log("INFO", "Engine", "Starting execution '$executionId': $prompt", executionId)
 
-        // Step 1: Normalize task or use predefined synthesized commands
-        val commands = predefinedCommands ?: parser.parse(prompt)
+        // Step 1: Normalize task via HierarchicalIntentRouter or deterministic fallback
+        val commands = if (predefinedCommands != null) {
+            predefinedCommands
+        } else {
+            val router = intentRouter
+            if (router != null) {
+                val routeRes = router.route(context, prompt, null)
+                if (routeRes.isOfflineDegraded) {
+                    val reason = "Device is offline and intelligence backend unreachable (0% hallucination fallback)."
+                    completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, useLive)
+                    return
+                }
+            }
+            parser.parse(prompt)
+        }
+
         if (commands.isEmpty()) {
             val reason = "Could not parse any actionable commands from prompt: '$prompt'"
             completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, useLive)
             return
+        }
+
+        // Pre-Flight Human Approval Gate Assessment
+        val proposedSteps = commands.mapIndexed { idx, cmd ->
+            com.example.core.approval.ProposedStep(
+                stepIndex = idx + 1,
+                description = cmd.displayName,
+                actionType = cmd.javaClass.simpleName,
+                target = (cmd as? TaskCommand.LaunchApp)?.appName ?: cmd.displayName
+            )
+        }
+        val plan = approvalGate.proposePlan(prompt, (commands.firstOrNull() as? TaskCommand.LaunchApp)?.packageName, proposedSteps)
+        if (plan.requiresElevatedConfirmation) {
+            repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Elevated gate active.", executionId)
         }
 
         _state.update {

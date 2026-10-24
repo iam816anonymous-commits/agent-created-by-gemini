@@ -1295,18 +1295,13 @@ export function App() {
       return;
     }
 
-    if (lower === 'download' || lower === 'download apk' || lower === 'get apk' || lower === 'dload') {
-      const a = document.createElement('a');
-      a.href = '/LocalAgent-v2.5-arm64-api27.apk';
-      a.download = 'LocalAgent-v2.5-arm64-api27.apk';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      addLine('[DIRECT APK DOWNLOAD] Triggered browser download of LocalAgent-v2.5-arm64-api27.apk.', 'pass');
-      addLine('  ├─ Target: LocalAgent-v2.5-arm64-api27.apk (arm64-v8a • API 27+)', 'output');
-      addLine('  ├─ Destination: /sdcard/Download on your TECNO device', 'output');
-      addLine('  └─ Install: Open TECNO File Manager -> Downloads -> Tap APK -> Allow Unknown Sources -> Install', 'highlight');
+    if (lower === 'download' || lower === 'download apk' || lower === 'get apk' || lower === 'dload' || lower === 'install direct') {
       setShowMobileInstallModal(true);
+      addLine('[LOCALAGENT BUILD & INSTALL] Opened Mobile & APK Setup Center.', 'pass');
+      addLine('  ├─ Build Command: ./gradlew assembleDebug', 'output');
+      addLine('  ├─ ADB Fast Install: adb install -r -g app/build/outputs/apk/debug/app-debug.apk', 'output');
+      addLine('  ├─ Firefox PWA: 3-dot Menu -> Add to Home Screen (instant offline dashboard)', 'output');
+      addLine('  └─ Target Hardware: TECNO Helio P23 & Android 8.1 - 17 (API 27 - 36+)', 'highlight');
       return;
     }
 
@@ -3965,34 +3960,29 @@ export function App() {
             {/* PROMINENT DIRECT INSTALL APK ACTION BUTTON */}
             <button
               onClick={() => {
-                const a = document.createElement('a');
-                a.href = '/LocalAgent-v2.5-arm64-api27.apk';
-                a.download = 'LocalAgent-v2.5-arm64-api27.apk';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
                 setActiveCategory('android_multiversion');
                 setShowMobileInstallModal(true);
               }}
-              title="Direct Install APK on phone (FileProvider & Intent.ACTION_VIEW for Android 8.0 through 16)"
+              title="Install & Setup Guide for Android 8.1 through 16"
               className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border bg-cyan-400 hover:bg-cyan-300 active:bg-cyan-500 text-black shadow-md shadow-cyan-400/25 cursor-pointer"
             >
               <Smartphone className="w-3.5 h-3.5 stroke-[2.5]" />
               <span className="sm:hidden">INSTALL</span>
-              <span className="hidden sm:inline">DIRECT INSTALL APK</span>
+              <span className="hidden sm:inline">INSTALL GUIDE</span>
             </button>
 
-            {/* DIRECT DOWNLOAD APK BUTTON (For TECNO & Firefox Users) */}
-            <a
-              href="/LocalAgent-v2.5-arm64-api27.apk"
-              download="LocalAgent-v2.5-arm64-api27.apk"
-              title="Direct Download APK file to phone (For TECNO, Firefox, and Android 8.1+)"
-              className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-black shadow-md shadow-emerald-500/25"
+            {/* DIRECT DOWNLOAD / BUILD APK BUTTON (For TECNO & Firefox Users) */}
+            <button
+              onClick={() => {
+                setShowMobileInstallModal(true);
+              }}
+              title="Direct Install / Build Guide (For TECNO, Firefox, and Android 8.1+)"
+              className="min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 border bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-black shadow-md shadow-emerald-500/25 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="sm:hidden">APK</span>
-              <span className="hidden sm:inline">DOWNLOAD APK</span>
-            </a>
+              <span className="sm:hidden">BUILD/APK</span>
+              <span className="hidden sm:inline">BUILD &amp; INSTALL APK</span>
+            </button>
 
             {/* Mobile-Only Quick Menu Drawer Toggle (Avoids Multi-Row Header Overlap on Mobile) */}
             <button
@@ -4079,14 +4069,9 @@ export function App() {
           <div className="sm:hidden max-w-7xl mx-auto mt-2 pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-2 font-mono text-xs animate-fade-in">
             <button
               onClick={() => {
-                const a = document.createElement('a');
-                a.href = '/LocalAgent-v2.5-arm64-api27.apk';
-                a.download = 'LocalAgent-v2.5-arm64-api27.apk';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
                 setActiveCategory('android_multiversion');
                 setShowMobileQuickMenu(false);
+                setShowMobileInstallModal(true);
               }}
               className="p-2.5 rounded-xl bg-cyan-950/90 border border-cyan-400 text-cyan-200 flex items-center gap-2 text-left shadow-sm"
             >
@@ -4140,17 +4125,19 @@ export function App() {
               </div>
             </button>
 
-            <a
-              href="/LocalAgent-Android-FullSource.zip"
-              download="LocalAgent-Android-FullSource.zip"
+            <button
+              onClick={() => {
+                setShowMobileQuickMenu(false);
+                setShowMobileInstallModal(true);
+              }}
               className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-center gap-2 text-left hover:border-slate-700"
             >
               <Download className="w-4 h-4 text-emerald-400 shrink-0" />
               <div>
-                <div className="font-bold text-[11px]">Source ZIP</div>
-                <div className="text-[9px] text-slate-400">Android Studio Project</div>
+                <div className="font-bold text-[11px]">Install Guide</div>
+                <div className="text-[9px] text-slate-400">Build &amp; Install Setup</div>
               </div>
-            </a>
+            </button>
           </div>
         )}
       </header>
@@ -4462,12 +4449,6 @@ export function App() {
                       key={idx}
                       onClick={() => {
                         if (preset.cmd === 'download apk') {
-                          const a = document.createElement('a');
-                          a.href = '/LocalAgent-v2.5-arm64-api27.apk';
-                          a.download = 'LocalAgent-v2.5-arm64-api27.apk';
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
                           setShowMobileInstallModal(true);
                           return;
                         }

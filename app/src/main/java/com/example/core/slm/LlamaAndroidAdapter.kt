@@ -74,11 +74,15 @@ class LlamaAndroidAdapter {
             )
         }
 
-        val baseDir = modelDir ?: File(Environment.getExternalStorageDirectory(), "LocalAgent/models")
+        val baseDir = modelDir ?: run {
+            val appPrivateDir = File("/sdcard/Android/data/com.example.localagent/files/models")
+            if (appPrivateDir.exists()) appPrivateDir
+            else File(Environment.getExternalStorageDirectory(), "LocalAgent/models")
+        }
         val modelFile = File(baseDir, profile.modelName)
         if (!modelFile.exists() || !modelFile.canRead()) {
             throw NativeModelUnavailableException(
-                "GGUF model file '${profile.modelName}' not found at ${modelFile.absolutePath}."
+                "GGUF model file '${profile.modelName}' not found in app storage: ${modelFile.absolutePath}."
             )
         }
 

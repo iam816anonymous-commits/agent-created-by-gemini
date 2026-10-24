@@ -32,7 +32,10 @@ import java.util.concurrent.TimeUnit
  * 3. When external AI is enabled, executes real HTTPS calls to the Gemini API via OkHttpClient.
  *    If network is offline or key is invalid, returns an explicit, honest Result.failure.
  */
-class CognitiveBrainEngine {
+class CognitiveBrainEngine(
+    private var keyStoreManager: com.example.core.security.KeyStoreManager? = null,
+    var modelName: String = "gemini-2.5-flash"
+) {
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(6, TimeUnit.SECONDS)
@@ -48,9 +51,16 @@ class CognitiveBrainEngine {
     private val _activeCognitiveMode = MutableStateFlow("100% On-Device Heuristic Brain (Zero Cloud Token)")
     val activeCognitiveMode: StateFlow<String> = _activeCognitiveMode.asStateFlow()
 
+    fun setKeyStoreManager(manager: com.example.core.security.KeyStoreManager) {
+        this.keyStoreManager = manager
+    }
+
     fun setExternalAiConfig(enabled: Boolean, apiKey: String) {
         _isExternalAiEnabled.value = enabled
         _externalAiApiKey.value = apiKey.trim()
+        if (apiKey.isNotBlank()) {
+            keyStoreManager?.storeSecret("gemini_api_key", apiKey.trim())
+        }
         _activeCognitiveMode.value = if (enabled && apiKey.isNotBlank()) {
             "Hybrid Mode: On-Device Brain + Cloud Gemini API Active"
         } else {
@@ -59,17 +69,22 @@ class CognitiveBrainEngine {
     }
 
     /**
-     * Executes an authentic HTTPS call to the Gemini API.
+     * Executes an authentic HTTPS call to the Gemini API using header-based authentication.
+     * The API key is NEVER passed in the URL query string.
      * Never returns canned or fabricated responses.
      */
-    suspend fun queryGemini(prompt: String, systemInstruction: String? = null): Result<String> = withContext(Dispatchers.IO) {
-        val apiKey = _externalAiApiKey.value
+    suspend fun queryGemini(
+        prompt: String,
+        systemInstruction: String? = null,
+        enforceJsonResponse: Boolean = false
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val apiKey = keyStoreManager?.getSecret("gemini_api_key") ?: _externalAiApiKey.value
         if (apiKey.isBlank()) {
-            return@withContext Result.failure(IllegalStateException("No Gemini API key configured in CognitiveBrainEngine."))
+            return@withContext Result.failure(IllegalStateException("No Gemini API key configured in KeyStore or CognitiveBrainEngine."))
         }
 
         try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
             val partsArray = JSONArray().apply {
                 put(JSONObject().apply { put("text", prompt) })
@@ -87,11 +102,17 @@ class CognitiveBrainEngine {
                         })
                     })
                 }
+                if (enforceJsonResponse) {
+                    put("generationConfig", JSONObject().apply {
+                        put("responseMimeType", "application/json")
+                    })
+                }
             }
 
             val body = requestJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder()
                 .url(endpoint)
+                .addHeader("x-goog-api-key", apiKey)
                 .post(body)
                 .build()
 

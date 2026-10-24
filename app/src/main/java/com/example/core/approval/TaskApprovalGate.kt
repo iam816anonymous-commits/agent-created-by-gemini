@@ -46,14 +46,14 @@ data class ExecutionPlan(
 class TaskApprovalGate {
 
     companion object {
-        // Strict word boundary patterns for credential matching (Never match "shopping" or "pinpoint")
+        // Pattern-based classifier with strict word boundaries to prevent substring collisions
         private val CREDENTIAL_WORD_PATTERN = Pattern.compile(
             "\\b(pin|pin code|passcode|password|secret key|credentials?|master password)\\b",
             Pattern.CASE_INSENSITIVE
         )
 
         private val FINANCIAL_WORD_PATTERN = Pattern.compile(
-            "\\b(transfer money|send money|pay|wire funds|debit|credit card|bank account|upi|checkout|authorize payment)\\b",
+            "\\b(transfer money|send money|pay to|pay bill|pay recipient|make payment|wire funds|debit|credit card|bank account|upi|checkout|authorize payment)\\b",
             Pattern.CASE_INSENSITIVE
         )
 

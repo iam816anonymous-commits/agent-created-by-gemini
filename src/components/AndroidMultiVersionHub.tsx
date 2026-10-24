@@ -136,7 +136,7 @@ export function AndroidMultiVersionHub({
   const [installLogs, setInstallLogs] = useState<string[]>([
     '[INIT] FileProvider manifest configured for authority: "com.example.localagent.fileprovider"',
     '[INIT] MIME type bound to "application/vnd.android.package-archive"',
-    '[READY] APK payload compiled: LocalAgent-v2.5-arm64-api27.apk (28.4 MB)'
+    '[READY] APK payload compiled: app/build/outputs/apk/debug/app-debug.apk (arm64-v8a • API 27+)'
   ]);
 
   // Dynamic Permission State

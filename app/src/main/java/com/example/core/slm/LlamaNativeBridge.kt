@@ -26,9 +26,14 @@ object LlamaNativeBridge {
         }
     }
 
+    @JvmStatic
     external fun nativeInitContext(modelPath: String, nThreads: Int, nCtx: Int): Long
+    @JvmStatic
     external fun nativeCompileGbnf(grammarStr: String): Long
+    @JvmStatic
     external fun nativeCompleteConstrained(handle: Long, grammarHandle: Long, prompt: String): String
+    @JvmStatic
     external fun nativeFreeContext(handle: Long)
+    @JvmStatic
     external fun nativeFreeGrammar(grammarHandle: Long)
 }

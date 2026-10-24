@@ -57,7 +57,7 @@ export const MobileInstallGuideModal: React.FC<MobileInstallGuideModalProps> = (
 adb devices
 
 # 3. Install APK directly granting all runtime permissions (-g)
-adb install -r -g LocalAgent-v2.5-arm64-api27.apk
+adb install -r -g app/build/outputs/apk/debug/app-debug.apk
 
 # 4. Activate AccessibilityService automatically via ADB
 adb shell settings put secure enabled_accessibility_services com.example.localagent/.LocalAgentAccessibilityService
@@ -68,6 +68,27 @@ adb shell dumpsys deviceidle whitelist +com.example.localagent
 
 # 6. Verify 42MB idle RAM ceiling on MediaTek Helio P23
 adb shell dumpsys meminfo com.example.localagent`;
+
+  const installShellScript = `#!/bin/bash
+# LocalAgent Build & Direct Install Script for TECNO & Android Devices
+set -e
+echo "=== Step 1: Building LocalAgent APK ==="
+./gradlew assembleDebug
+
+echo "=== Step 2: Installing to connected Android device ==="
+adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+
+echo "=== Step 3: Enabling Accessibility Service ==="
+adb shell settings put secure enabled_accessibility_services com.example.localagent/.LocalAgentAccessibilityService
+adb shell settings put secure accessibility_enabled 1
+
+echo "=== Step 4: Whitelisting from battery optimization ==="
+adb shell dumpsys deviceidle whitelist +com.example.localagent
+
+echo "=== Success! LocalAgent is active and ready on device ==="
+`;
+
+  const scriptDataUri = `data:text/x-sh;charset=utf-8,${encodeURIComponent(installShellScript)}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-mono">
@@ -199,55 +220,77 @@ adb shell dumpsys meminfo com.example.localagent`;
                     </div>
                   </div>
 
-                  <a
-                    href="/LocalAgent-v2.5-arm64-api27.apk"
-                    download="LocalAgent-v2.5-arm64-api27.apk"
-                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4 stroke-[2.5]" />
-                    <span>DOWNLOAD LOCALAGENT APK (DIRECT)</span>
-                  </a>
+                  <div className="space-y-2 pt-1">
+                    <a
+                      href={scriptDataUri}
+                      download="install-localagent.sh"
+                      className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4 stroke-[2.5]" />
+                      <span>DOWNLOAD AUTO-INSTALL SCRIPT (.SH)</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopySnippet('./gradlew assembleDebug && adb install -r -g app/build/outputs/apk/debug/app-debug.apk', 'fast_build')}
+                      className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-800/60 font-mono font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5"
+                    >
+                      {copiedCommand === 'fast_build' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCommand === 'fast_build' ? 'Copied Build & Install!' : 'Copy 1-Liner Build & Install Command'}</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* CARD 2: SOURCE CODE & GRADLE ZIP */}
+                {/* CARD 2: SOURCE CODE & ON-DEVICE COMPILATION */}
                 <div className="p-4 bg-black border border-slate-900 rounded-xl space-y-3 flex flex-col justify-between">
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-bold border border-cyan-800">
-                        ANDROID GRADLE PROJECT
+                        DIRECT ON-DEVICE (TERMUX)
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">ZIP BUNDLE</span>
+                      <span className="text-[10px] font-mono text-slate-500">NO PC NEEDED</span>
                     </div>
                     <h3 className="text-sm font-bold text-white font-mono">
-                      LocalAgent-Android-FullSource.zip
+                      Build Directly On TECNO Phone
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Complete source code tree including <code className="text-cyan-300 font-mono">AndroidMultiVersionBridge.kt</code>, <code className="text-cyan-300 font-mono">DeviceProfiler.kt</code>, Gradle build scripts, and native JNI bindings.
+                      You can compile and run LocalAgent natively on your phone inside Termux without requiring a separate laptop or desktop computer.
                     </p>
                     <div className="space-y-1 text-[10px] font-mono text-slate-400 pt-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-cyan-400">&bull;</span>
-                        <span>Full Kotlin 1.9+ &amp; Android Gradle Plugin 8.5</span>
+                        <span>Installs OpenJDK 17 &amp; Android Gradle</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-cyan-400">&bull;</span>
-                        <span>Room SQLite database schemas &amp; migrations</span>
+                        <span>Compiles ARM64 debug APK directly to storage</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-cyan-400">&bull;</span>
-                        <span>Android Studio ready-to-import project</span>
+                        <span>100% offline development environment</span>
                       </div>
                     </div>
                   </div>
 
-                  <a
-                    href="/LocalAgent-Android-FullSource.zip"
-                    download="LocalAgent-Android-FullSource.zip"
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-mono font-bold text-xs rounded-xl transition-all border border-cyan-800/60 flex items-center justify-center gap-2"
-                  >
-                    <FolderDown className="w-4 h-4" />
-                    <span>DOWNLOAD SOURCE PROJECT (.ZIP)</span>
-                  </a>
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleCopySnippet('pkg update && pkg install -y git openjdk-17 gradle adb && ./gradlew assembleDebug', 'termux_cmd')}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 font-mono font-bold text-xs rounded-xl transition-all border border-cyan-800/60 flex items-center justify-center gap-2"
+                    >
+                      {copiedCommand === 'termux_cmd' ? <Check className="w-4 h-4" /> : <Terminal className="w-4 h-4" />}
+                      <span>{copiedCommand === 'termux_cmd' ? 'Copied Termux Command!' : 'COPY TERMUX BUILD COMMAND'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('firefox_pwa')}
+                      className="w-full py-2 bg-black hover:bg-slate-900 text-slate-400 hover:text-white font-mono text-[11px] rounded-lg transition-all border border-slate-800 flex items-center justify-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Or Use Firefox Android PWA (Instant) &rarr;</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -432,12 +475,12 @@ adb shell dumpsys meminfo com.example.localagent`;
         <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-t border-slate-900 bg-black/90 text-[10px]">
           <div className="flex items-center gap-2">
             <a
-              href="/LocalAgent-v2.5-arm64-api27.apk"
-              download="LocalAgent-v2.5-arm64-api27.apk"
+              href={scriptDataUri}
+              download="install-localagent.sh"
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-mono rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
             >
               <Download className="w-3 h-3 stroke-[2.5]" />
-              <span>Direct Download APK</span>
+              <span>Download Install Script (.sh)</span>
             </a>
             <span className="text-slate-500 font-mono hidden sm:inline">
               arm64-v8a &bull; API 27+ &bull; 100% Offline
