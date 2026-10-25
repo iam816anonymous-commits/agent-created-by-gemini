@@ -78,7 +78,8 @@ import {
   Copy,
   CornerDownLeft,
   TrendingUp,
-  Binary
+  Binary,
+  Waves
 } from 'lucide-react';
 import { KotlinArchitectureViewer } from './components/KotlinArchitectureViewer';
 import { AutonomousPatternStudio, ComposedLightPattern, ComposedSoundPattern } from './components/AutonomousPatternStudio';
@@ -1572,11 +1573,91 @@ export function App() {
         addLine('[ACTUATOR] CameraManager: Dual 360° strobe mode enabled across both emitters.', 'warn');
         return;
       }
+      if (lower.includes('flash wave') || lower.includes('torch wave') || lower.includes('waving')) {
+        setFlashlightWaveFormat('SINE_WAVE');
+        setFlashlightActive(true);
+        setActivePhoneTab('FLASHLIGHT');
+        addLine('[ACTUATOR] CameraManager: Optical SINE_WAVE waving modulation engaged with haptic ripple.', 'pass');
+        return;
+      }
+      if (lower.includes('flash strobe') || lower.includes('strobe')) {
+        setFlashlightWaveFormat('STROBE_BURST');
+        setFlashlightActive(true);
+        setFlashlightMode('DUAL');
+        setActivePhoneTab('FLASHLIGHT');
+        triggerHapticFeedback('BURST');
+        addLine('[ACTUATOR] CameraManager: Dual 360° STROBE_BURST optical wave active.', 'warn');
+        return;
+      }
+      if (lower.includes('flash sos') || lower.includes('sos')) {
+        setFlashlightWaveFormat('SOS_BEACON');
+        setFlashlightActive(true);
+        setActivePhoneTab('FLASHLIGHT');
+        addLine('[ACTUATOR] CameraManager: International Morse Code SOS_BEACON (... --- ...) waving pattern active.', 'pass');
+        return;
+      }
+      if (lower.includes('heartbeat')) {
+        setFlashlightWaveFormat('HEARTBEAT');
+        setFlashlightActive(true);
+        setActivePhoneTab('FLASHLIGHT');
+        addLine('[ACTUATOR] CameraManager: Biomimetic HEARTBEAT dual systolic pulse wave active.', 'pass');
+        return;
+      }
+      if (lower.includes('dual wave') || lower.includes('alternating')) {
+        setFlashlightWaveFormat('DUAL_ALTERNATING');
+        setFlashlightActive(true);
+        setActivePhoneTab('FLASHLIGHT');
+        addLine('[ACTUATOR] CameraManager: DUAL_ALTERNATING waving back & forth between rear and front emitters.', 'pass');
+        return;
+      }
       if (lower.includes('flash off') || lower.includes('torch off')) {
         setFlashlightActive(false);
         addLine('[ACTUATOR] CameraManager: Flashlight disabled.', 'output');
         return;
       }
+    }
+
+    if (lower === 'probe hardware' || lower === 'probe' || lower === 'specs' || lower === 'device specs' || lower === 'tst probe') {
+      setIsCmdRunning(true);
+      addLine('[DYNAMIC PROBE] Probing live host device hardware & computing safe ceiling...', 'info');
+      setTimeout(async () => {
+        const p = dynamicHostProbe || await probeLiveDeviceHardware();
+        addLine(`  ├─ Live Host:      ${p.deviceName} (${p.platform} / ${p.osVersion})`, 'pass');
+        addLine(`  ├─ Physical RAM:   ${p.totalRamMb} MB (${(p.totalRamMb / 1024).toFixed(1)} GB)`, 'output');
+        addLine(`  ├─ OS Overhead:    ${p.osOverheadMb} MB | Active App Buffer: ${p.activeAppBufferMb} MB`, 'output');
+        addLine(`  ├─ Safe SLM Cap:   ${p.calculatedSafeCeilingMb} MB (Math: [Total - OS - Buffer] * 0.25)`, 'highlight');
+        addLine(`  ├─ CPU Cores:      ${p.cpuCores} hardware threads`, 'output');
+        addLine(`  ├─ GPU Renderer:   ${p.gpuRenderer}`, 'output');
+        addLine(`  ├─ Battery State:  ${p.batteryPercent ?? 'N/A'}% (${p.isCharging ? 'Charging' : 'Discharging'})`, 'output');
+        addLine(`  ├─ Camera Torch:   ${physicalTorchSupported ? 'PHYSICAL HARDWARE TORCH SUPPORTED' : 'Simulated HAL Camera API'}`, physicalTorchSupported ? 'pass' : 'output');
+        addLine(`  ├─ Auto-Selection: ${p.recommendedModelName} (${p.recommendedTier})`, 'pass');
+        addLine(`  └─ Rationale:      ${p.recommendationRationale}`, 'output');
+        addLine('[PASS] Live Dynamic Hardware telemetry verified.', 'pass');
+        setIsCmdRunning(false);
+      }, 300);
+      return;
+    }
+
+    if (lower === 'recommend' || lower === 'apply recommended' || lower === 'apply optimal') {
+      setIsCmdRunning(true);
+      addLine('[DYNAMIC OPTIMIZER] Applying dynamically probed recommendation...', 'info');
+      setTimeout(async () => {
+        const p = dynamicHostProbe || await probeLiveDeviceHardware();
+        setActiveHardwareTier(p.recommendedTier);
+        if (p.totalRamMb <= 4096) {
+          setActiveDevicePreset(DEVICE_PRESETS[0]);
+        } else if (p.totalRamMb <= 8192) {
+          setActiveDevicePreset(DEVICE_PRESETS[1]);
+        } else {
+          setActiveDevicePreset(DEVICE_PRESETS[2]);
+        }
+        addLine(`  ├─ Applied Tier:    ${p.recommendedTier}`, 'pass');
+        addLine(`  ├─ Applied Model:   ${p.recommendedModelName}`, 'pass');
+        addLine(`  └─ Memory Governor: Ceiling set to ${p.calculatedSafeCeilingMb}MB resident RAM`, 'highlight');
+        addLine('[PASS] Hardware profile dynamically configured to optimal host parameters.', 'pass');
+        setIsCmdRunning(false);
+      }, 250);
+      return;
     }
 
     if (lower.startsWith('compose light') || lower.startsWith('pattern light')) {
@@ -2478,6 +2559,13 @@ export function App() {
   // Flashlight & Hardware Actuators State
   const [flashlightActive, setFlashlightActive] = useState(false);
   const [flashlightMode, setFlashlightMode] = useState<'BACK' | 'FRONT' | 'DUAL'>('BACK');
+  const [flashlightWaveFormat, setFlashlightWaveFormat] = useState<FlashlightWaveFormat>('SINE_WAVE');
+  const [flashlightWaveIntensity, setFlashlightWaveIntensity] = useState<number>(1.0);
+  const [flashlightWaveSpeed, setFlashlightWaveSpeed] = useState<number>(1.0);
+  const [physicalTorchActive, setPhysicalTorchActive] = useState<boolean>(false);
+  const [physicalTorchSupported, setPhysicalTorchSupported] = useState<boolean>(false);
+  const [dynamicHostProbe, setDynamicHostProbe] = useState<DynamicDeviceTelemetry | null>(null);
+  const [showProbeBanner, setShowProbeBanner] = useState<boolean>(true);
   const [flashlightRemainingSeconds, setFlashlightRemainingSeconds] = useState<number | null>(null);
   const [flashlightTotalSeconds, setFlashlightTotalSeconds] = useState<number | null>(null);
   const [hapticFrequency, setHapticFrequency] = useState<'TICK' | 'BURST' | 'IMPACT'>('TICK');
@@ -2488,6 +2576,81 @@ export function App() {
   const [wifiEnabled, setWifiEnabled] = useState(true);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
   const [batteryLevel, setBatteryLevel] = useState(84);
+
+  // Probe real host hardware and camera torch actuators on mount
+  useEffect(() => {
+    let unmounted = false;
+    probeLiveDeviceHardware().then(data => {
+      if (unmounted) return;
+      setDynamicHostProbe(data);
+      if (data.batteryPercent !== null) {
+        setBatteryLevel(data.batteryPercent);
+      }
+      setExecutionLogs(prev => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] DYNAMIC HARDWARE PROBE: Detected ${data.deviceName} (${data.osVersion}), ${data.totalRamMb}MB RAM, ${data.cpuCores} cores. Safe SLM Ceiling: ${data.calculatedSafeCeilingMb}MB. Recommended: ${data.recommendedModelName}.`
+      ]);
+    });
+
+    webTorchActuator.init().then(hasVideo => {
+      if (unmounted) return;
+      if (hasVideo) {
+        webTorchActuator.acquireCameraTorch().then(hasTorch => {
+          if (!unmounted) setPhysicalTorchSupported(hasTorch);
+        });
+      }
+    });
+
+    return () => {
+      unmounted = true;
+      webTorchActuator.stopWave();
+      webTorchActuator.releaseHardwareTorch();
+    };
+  }, []);
+
+  // Flashlight Watchdog Countdown Timer
+  useEffect(() => {
+    if (!flashlightActive || flashlightRemainingSeconds === null) return;
+    if (flashlightRemainingSeconds <= 0) {
+      setFlashlightActive(false);
+      setFlashlightRemainingSeconds(null);
+      setFlashlightTotalSeconds(null);
+      return;
+    }
+    const timer = setInterval(() => {
+      setFlashlightRemainingSeconds(prev => {
+        if (prev === null || prev <= 1) {
+          setFlashlightActive(false);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [flashlightActive, flashlightRemainingSeconds]);
+
+  // Flashlight Optical Waving Actuator Loop
+  useEffect(() => {
+    if (flashlightActive) {
+      webTorchActuator.startWave(flashlightWaveFormat, flashlightWaveSpeed, (intensity, emitter) => {
+        setFlashlightWaveIntensity(intensity);
+        if (flashlightWaveFormat === 'DUAL_ALTERNATING') {
+          setFlashlightMode(emitter);
+        }
+      });
+      webTorchActuator.triggerHapticWave(flashlightWaveFormat);
+      webTorchActuator.playWaveChime(flashlightWaveFormat);
+      if (physicalTorchActive && physicalTorchSupported) {
+        webTorchActuator.setHardwareTorch(true);
+      }
+    } else {
+      webTorchActuator.stopWave();
+      setFlashlightWaveIntensity(0);
+      if (physicalTorchSupported) {
+        webTorchActuator.setHardwareTorch(false);
+      }
+    }
+  }, [flashlightActive, flashlightWaveFormat, flashlightWaveSpeed, physicalTorchActive, physicalTorchSupported]);
 
   // Keep Notes Application State
   const [notesList, setNotesList] = useState<NoteItem[]>([
@@ -3115,6 +3278,14 @@ export function App() {
       else if (lower.includes('1 min') || lower.includes('1 minute') || lower.includes('60s')) durationSeconds = 60;
       else if (lower.includes('2 min') || lower.includes('2 minute') || lower.includes('120s')) durationSeconds = 120;
 
+      let waveFormat: FlashlightWaveFormat = 'SINE_WAVE';
+      if (lower.includes('strobe')) waveFormat = 'STROBE_BURST';
+      else if (lower.includes('sos')) waveFormat = 'SOS_BEACON';
+      else if (lower.includes('heartbeat')) waveFormat = 'HEARTBEAT';
+      else if (lower.includes('alternat')) waveFormat = 'DUAL_ALTERNATING';
+      else if (lower.includes('solid') || lower.includes('constant')) waveFormat = 'CONSTANT';
+      else if (lower.includes('wave') || lower.includes('waving')) waveFormat = 'SINE_WAVE';
+
       const app = installedApps.find(a => a.packageName === 'com.android.hardware.flashlight') || installedApps[1];
 
       const steps: StepPlan[] = [
@@ -3144,9 +3315,9 @@ export function App() {
         },
         {
           stepIndex: 4,
-          description: `Dispatch setTorchMode(id, true) for ${targetMode} flash emitter`,
+          description: `Dispatch optical waving modulation [${waveFormat}] to ${targetMode} flash emitter`,
           actionType: 'ACTUATE_HARDWARE',
-          target: `CameraManager.setTorchMode(${targetMode})`,
+          target: `CameraManager.waveTorch(${waveFormat})`,
           risk: 'LOW',
           status: 'PENDING'
         },
@@ -3160,7 +3331,7 @@ export function App() {
         }
       ];
 
-      return { app, steps, flashlightTargetMode: targetMode, flashlightDuration: durationSeconds, isNoteAction: false };
+      return { app, steps, flashlightTargetMode: targetMode, flashlightDuration: durationSeconds, flashlightWaveFormat: waveFormat, isNoteAction: false };
     }
 
     // 2. NOTE INTENT (Google Keep Notes / Note App)
@@ -3564,6 +3735,8 @@ export function App() {
       if (targetPackageForPlan === 'com.android.hardware.flashlight' && i === 3) {
         const mode = resolution.flashlightTargetMode || 'BACK';
         const dur = resolution.flashlightDuration || 60;
+        const waveFmt = (resolution as any).flashlightWaveFormat || 'SINE_WAVE';
+        setFlashlightWaveFormat(waveFmt);
         setFlashlightActive(true);
         setFlashlightMode(mode);
         setFlashlightRemainingSeconds(dur);
@@ -4143,6 +4316,72 @@ export function App() {
           </div>
         )}
       </header>
+
+      {/* DYNAMIC DEVICE HARDWARE PROBE BANNER (Live Host Integration) */}
+      {showProbeBanner && dynamicHostProbe && (
+        <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-2">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-950 to-blue-950/70 border border-cyan-500/40 font-mono text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-md">
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400 flex items-center justify-center shrink-0 text-cyan-300">
+                <Cpu className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-white flex items-center gap-1">
+                    <span className="text-cyan-400">[LIVE HOST PROBE]</span> {dynamicHostProbe.deviceName}
+                  </span>
+                  <span className="text-[10px] bg-cyan-950 border border-cyan-800 text-cyan-300 px-1.5 py-0.2 rounded">
+                    {dynamicHostProbe.totalRamMb}MB RAM ({dynamicHostProbe.cpuCores} Cores)
+                  </span>
+                  <span className="text-[10px] bg-emerald-950 border border-emerald-800 text-emerald-300 px-1.5 py-0.2 rounded">
+                    Safe Cap: {dynamicHostProbe.calculatedSafeCeilingMb}MB
+                  </span>
+                  {physicalTorchSupported && (
+                    <span className="text-[10px] bg-amber-950 border border-amber-800 text-amber-300 px-1.5 py-0.2 rounded font-bold">
+                      Physical Torch Ready
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-300 truncate mt-0.5">
+                  GPU: {dynamicHostProbe.gpuRenderer.slice(0, 32)} &bull; Recommended Model: <strong className="text-emerald-400">{dynamicHostProbe.recommendedModelName}</strong> ({dynamicHostProbe.recommendedTier})
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setActiveHardwareTier(dynamicHostProbe.recommendedTier);
+                  if (dynamicHostProbe.totalRamMb <= 4096) {
+                    setActiveDevicePreset(DEVICE_PRESETS[0]);
+                  } else if (dynamicHostProbe.totalRamMb <= 8192) {
+                    setActiveDevicePreset(DEVICE_PRESETS[1]);
+                  } else {
+                    setActiveDevicePreset(DEVICE_PRESETS[2]);
+                  }
+                  triggerHapticFeedback('CONFIRM');
+                  playWebAudioChime();
+                  setExecutionLogs(l => [
+                    ...l,
+                    `[${new Date().toLocaleTimeString()}] DYNAMIC_CONFIG: Applied recommended hardware profile for ${dynamicHostProbe.deviceName} (${dynamicHostProbe.recommendedTier}, ${dynamicHostProbe.recommendedModelName}).`
+                  ]);
+                }}
+                className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[11px] rounded-lg transition-colors cursor-pointer shadow-sm shadow-cyan-500/30 flex items-center gap-1"
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                <span>APPLY OPTIMAL SETUP</span>
+              </button>
+              <button
+                onClick={() => setShowProbeBanner(false)}
+                title="Dismiss Banner"
+                className="p-1 rounded text-slate-500 hover:text-slate-300 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           SECTION 2: JARVIS TELEMETRY & COGNITIVE HUD BAR
@@ -5142,20 +5381,28 @@ export function App() {
                   <span className="text-[10px] font-mono text-emerald-400">100% Controllable</span>
                 </div>
 
-                {/* 1. Flashlight Multi-Emitter Control Card */}
-                <div className="p-3.5 bg-black border border-amber-500/40 rounded-xl space-y-2.5 mb-3">
+                {/* 1. Flashlight Multi-Emitter & Optical Waving Control Card */}
+                <div className="p-3.5 bg-black border border-amber-500/40 rounded-xl space-y-3 mb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Sun className="w-4 h-4 text-amber-400" />
                       <span className="font-bold text-white text-xs font-mono uppercase">
-                        Camera Flashlight Emitters
+                        Camera Flashlight &amp; Waving Actuators
                       </span>
                     </div>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
-                      flashlightActive ? 'bg-amber-400 text-black animate-pulse' : 'bg-slate-900 text-slate-500'
-                    }`}>
-                      {flashlightActive ? 'ILLUMINATION ACTIVE' : 'TORCH OFF'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {flashlightActive && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-950 border border-amber-600/60 text-amber-300 font-bold flex items-center gap-1">
+                          <Waves className="w-2.5 h-2.5 animate-pulse text-amber-400" />
+                          <span>{flashlightWaveFormat.replace('_', ' ')}</span>
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                        flashlightActive ? 'bg-amber-400 text-black animate-pulse' : 'bg-slate-900 text-slate-500'
+                      }`}>
+                        {flashlightActive ? 'ILLUMINATION ACTIVE' : 'TORCH OFF'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Mode Buttons */}
@@ -5168,7 +5415,7 @@ export function App() {
                         setFlashlightTotalSeconds(60);
                         setActivePhoneTab('FLASHLIGHT');
                       }}
-                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all ${
+                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                         flashlightActive && flashlightMode === 'BACK'
                           ? 'bg-amber-500 text-black border-amber-400 font-bold'
                           : 'bg-black border-slate-800 text-slate-300 hover:text-white'
@@ -5186,7 +5433,7 @@ export function App() {
                         setFlashlightTotalSeconds(60);
                         setActivePhoneTab('FLASHLIGHT');
                       }}
-                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all ${
+                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                         flashlightActive && flashlightMode === 'FRONT'
                           ? 'bg-amber-500 text-black border-amber-400 font-bold'
                           : 'bg-black border-slate-800 text-slate-300 hover:text-white'
@@ -5204,7 +5451,7 @@ export function App() {
                         setFlashlightTotalSeconds(60);
                         setActivePhoneTab('FLASHLIGHT');
                       }}
-                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all ${
+                      className={`p-2 sm:p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                         flashlightActive && flashlightMode === 'DUAL'
                           ? 'bg-amber-500 text-black border-amber-400 font-bold'
                           : 'bg-black border-slate-800 text-slate-300 hover:text-white'
@@ -5215,11 +5462,132 @@ export function App() {
                     </button>
                   </div>
 
+                  {/* Waving Optical Modulation Formats */}
+                  <div className="p-2.5 bg-slate-950/90 rounded-lg border border-amber-900/30 space-y-2">
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="text-amber-300 font-bold flex items-center gap-1">
+                        <Waves className="w-3 h-3 text-amber-400" />
+                        OPTICAL WAVING MODULATION FORMAT:
+                      </span>
+                      <span className="text-slate-400">
+                        {flashlightActive ? `${Math.round(flashlightWaveIntensity * 100)}% Intensity` : 'Ready'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 font-mono text-[10px]">
+                      {[
+                        { id: 'SINE_WAVE', label: 'Sine Wave', desc: 'Fluid ~ Sinusoidal' },
+                        { id: 'DUAL_ALTERNATING', label: 'Dual Wave', desc: 'Rear ⇄ Front' },
+                        { id: 'STROBE_BURST', label: 'Strobe', desc: 'High Cadence ⚡' },
+                        { id: 'SOS_BEACON', label: 'SOS Beacon', desc: 'Morse (... --- ...)' },
+                        { id: 'HEARTBEAT', label: 'Heartbeat', desc: 'Biometric Double Pulse' },
+                        { id: 'CONSTANT', label: 'Solid Beam', desc: 'Unmodulated 100%' }
+                      ].map(fmt => (
+                        <button
+                          key={fmt.id}
+                          onClick={() => {
+                            setFlashlightWaveFormat(fmt.id as FlashlightWaveFormat);
+                            if (!flashlightActive) {
+                              setFlashlightActive(true);
+                              setFlashlightRemainingSeconds(60);
+                              setFlashlightTotalSeconds(60);
+                            }
+                            setActivePhoneTab('FLASHLIGHT');
+                            webTorchActuator.triggerHapticWave(fmt.id as FlashlightWaveFormat);
+                            webTorchActuator.playWaveChime(fmt.id as FlashlightWaveFormat);
+                          }}
+                          className={`p-1.5 rounded border text-left transition-colors cursor-pointer ${
+                            flashlightWaveFormat === fmt.id
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold shadow-sm shadow-amber-500/10'
+                              : 'bg-black border-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <div className="font-bold flex items-center justify-between">
+                            <span>{fmt.label}</span>
+                            {flashlightActive && flashlightWaveFormat === fmt.id && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                            )}
+                          </div>
+                          <div className="text-[8px] opacity-70 truncate">{fmt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Live Wave Intensity & Speed Slider */}
+                    <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-900 text-[10px] font-mono">
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <span className="text-slate-400 shrink-0">WAVE SPEED:</span>
+                        {[0.5, 1.0, 1.5, 2.0].map(spd => (
+                          <button
+                            key={spd}
+                            onClick={() => setFlashlightWaveSpeed(spd)}
+                            className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                              flashlightWaveSpeed === spd
+                                ? 'bg-amber-400 text-black font-bold'
+                                : 'bg-black text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            {spd}x
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Real Physical Web Camera Torch Toggle */}
+                      <button
+                        onClick={async () => {
+                          const nextState = !physicalTorchActive;
+                          if (nextState) {
+                            const acquired = await webTorchActuator.acquireCameraTorch();
+                            setPhysicalTorchSupported(acquired);
+                            if (acquired) {
+                              await webTorchActuator.setHardwareTorch(true);
+                              setPhysicalTorchActive(true);
+                              setFlashlightActive(true);
+                              setExecutionLogs(l => [
+                                ...l,
+                                `[${new Date().toLocaleTimeString()}] PHYSICAL TORCH: Real device camera torch engaged via Web MediaStreamTrack.`
+                              ]);
+                            } else {
+                              setExecutionLogs(l => [
+                                ...l,
+                                `[${new Date().toLocaleTimeString()}] PHYSICAL TORCH: Device camera torch constraint not exposed in current browser; running simulated HAL torch.`
+                              ]);
+                              setPhysicalTorchActive(true);
+                              setFlashlightActive(true);
+                            }
+                          } else {
+                            webTorchActuator.setHardwareTorch(false);
+                            setPhysicalTorchActive(false);
+                          }
+                          triggerHapticFeedback('TICK');
+                        }}
+                        className={`px-2 py-0.5 rounded border transition-colors cursor-pointer text-[10px] font-mono flex items-center gap-1 ${
+                          physicalTorchActive
+                            ? 'bg-emerald-500 text-black font-bold border-emerald-400'
+                            : 'bg-black text-slate-300 hover:text-white border-slate-800'
+                        }`}
+                      >
+                        <Camera className="w-3 h-3 text-cyan-400" />
+                        <span>{physicalTorchActive ? 'Physical Torch ON' : 'Engage Physical Torch'}</span>
+                      </button>
+                    </div>
+
+                    {/* Live Wave Intensity Meter */}
+                    {flashlightActive && (
+                      <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-amber-500 to-amber-300 h-full transition-all duration-75"
+                          style={{ width: `${Math.round(flashlightWaveIntensity * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   {/* Hardware HAL Notice */}
                   <div className="p-2 bg-slate-950/80 rounded border border-slate-900 text-[10px] text-slate-400 font-mono flex items-start gap-1.5">
                     <Info className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
                     <span>
-                      <strong className="text-slate-300">HAL Note:</strong> Concurrent Dual Flash requires Camera HAL3 concurrent streaming support. If hardware locks simultaneous ISP channels, agent gracefully falls back to primary rear torch.
+                      <strong className="text-slate-300">HAL Wave Pipeline:</strong> Wave modulation executes via synchronized requestAnimationFrame optical loop with matching multimodal haptics and procedural sine audio pitch.
                     </span>
                   </div>
 
@@ -5236,7 +5604,7 @@ export function App() {
                             setFlashlightTotalSeconds(s);
                             setActivePhoneTab('FLASHLIGHT');
                           }}
-                          className={`px-2 py-0.5 rounded ${
+                          className={`px-2 py-0.5 rounded cursor-pointer ${
                             flashlightActive && flashlightRemainingSeconds === s
                               ? 'bg-amber-400 text-black font-bold'
                               : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
@@ -5249,8 +5617,13 @@ export function App() {
 
                     {flashlightActive && (
                       <button
-                        onClick={() => setFlashlightActive(false)}
-                        className="px-2.5 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded font-mono text-[10px] font-bold"
+                        onClick={() => {
+                          setFlashlightActive(false);
+                          setPhysicalTorchActive(false);
+                          webTorchActuator.stopWave();
+                          webTorchActuator.setHardwareTorch(false);
+                        }}
+                        className="px-2.5 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded font-mono text-[10px] font-bold cursor-pointer"
                       >
                         SHUT OFF
                       </button>
@@ -5429,17 +5802,72 @@ export function App() {
                   {/* Camera & Speaker Notch */}
                   <div className="w-16 h-2 bg-slate-800 mx-auto rounded-full mb-1 shrink-0 z-20" />
 
-                  {/* ACTIVE FLASHLIGHT BEAM ANIMATION */}
+                  {/* ACTIVE OPTICAL WAVING FLASHLIGHT BEAM ANIMATION */}
                   {flashlightActive && (
                     <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-                      {(flashlightMode === 'FRONT' || flashlightMode === 'DUAL') && (
-                        <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-amber-300/40 via-amber-400/20 to-transparent blur-md animate-pulse" />
-                      )}
-                      {flashlightMode === 'DUAL' && (
-                        <div className="absolute inset-0 bg-amber-400/10 mix-blend-screen animate-pulse" />
-                      )}
+                      {/* Emitter Ambient Radial Wash */}
+                      <div
+                        className="absolute inset-0 bg-gradient-to-b from-amber-400/30 via-amber-300/15 to-transparent transition-opacity duration-75 mix-blend-screen"
+                        style={{ opacity: 0.2 + 0.8 * flashlightWaveIntensity }}
+                      />
+
+                      {/* Concentric SVG Radiating Wavefront Ripples */}
+                      <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <radialGradient id="waveGlow" cx="50%" cy="10%" r="70%">
+                            <stop offset="0%" stopColor="#fde047" stopOpacity={0.6 * flashlightWaveIntensity} />
+                            <stop offset="40%" stopColor="#f59e0b" stopOpacity={0.3 * flashlightWaveIntensity} />
+                            <stop offset="100%" stopColor="#b45309" stopOpacity="0" />
+                          </radialGradient>
+                        </defs>
+
+                        {/* Radiating concentric wavefront rings expanding from emitter */}
+                        {[1, 2, 3, 4, 5].map((ringIdx) => {
+                          const baseR = ringIdx * 35;
+                          const dynamicR = baseR + (flashlightWaveIntensity * 22);
+                          const ringOpacity = Math.max(0.1, (1 - ringIdx * 0.18) * flashlightWaveIntensity);
+                          return (
+                            <ellipse
+                              key={ringIdx}
+                              cx="140"
+                              cy="24"
+                              rx={dynamicR * 1.4}
+                              ry={dynamicR * 0.9}
+                              fill="none"
+                              stroke="#fde047"
+                              strokeWidth={ringIdx === 1 ? '2.5' : '1.5'}
+                              strokeOpacity={ringOpacity}
+                              strokeDasharray={flashlightWaveFormat === 'STROBE_BURST' ? '6,3' : flashlightWaveFormat === 'SOS_BEACON' ? '12,6' : 'none'}
+                              className="transition-all duration-75"
+                            />
+                          );
+                        })}
+
+                        {/* Top Emitter Core Glow */}
+                        <circle
+                          cx="140"
+                          cy="16"
+                          r={14 + 12 * flashlightWaveIntensity}
+                          fill="url(#waveGlow)"
+                        />
+                      </svg>
+
+                      {/* Physical Rear Quad-LED & Front Emitter Indicators */}
                       {(flashlightMode === 'BACK' || flashlightMode === 'DUAL') && (
-                        <div className="absolute top-2 right-4 w-3 h-3 bg-amber-300 rounded-full shadow-lg shadow-amber-300/90 ring-4 ring-amber-400/40 animate-ping" />
+                        <div
+                          className="absolute top-2 right-4 w-4 h-4 rounded-full bg-amber-300 shadow-lg shadow-amber-300/90 ring-4 ring-amber-400/40 transition-transform duration-75"
+                          style={{
+                            transform: `scale(${0.8 + 0.5 * flashlightWaveIntensity})`,
+                            boxShadow: `0 0 ${20 * flashlightWaveIntensity}px rgba(251, 191, 36, 0.9)`
+                          }}
+                        />
+                      )}
+
+                      {(flashlightMode === 'FRONT' || flashlightMode === 'DUAL') && (
+                        <div
+                          className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-2 rounded-full bg-amber-200 blur-[2px] transition-opacity duration-75"
+                          style={{ opacity: 0.4 + 0.6 * flashlightWaveIntensity }}
+                        />
                       )}
                     </div>
                   )}
@@ -5640,24 +6068,83 @@ export function App() {
                         </div>
                       </div>
                     ) : activePhoneTab === 'FLASHLIGHT' || flashlightActive ? (
-                      /* FLASHLIGHT CONTROLLER VIEW */
-                      <div className="my-auto space-y-2 py-1 text-center font-mono">
-                        <div className="relative mx-auto w-14 h-14 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                          <Sun className={`w-7 h-7 ${flashlightActive ? 'text-amber-300 fill-amber-300 animate-spin-slow' : 'text-slate-600'}`} />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-white">
-                            {flashlightMode === 'DUAL' ? 'Dual 360° Flash' : flashlightMode === 'FRONT' ? 'Front Flash' : 'Rear Flash'}
+                      /* FLASHLIGHT & OPTICAL WAVING CONTROLLER VIEW */
+                      <div className="my-auto space-y-1.5 py-1 text-center font-mono">
+                        {/* Waving Halo & Sun Centerpiece */}
+                        <div className="relative mx-auto w-12 h-12 flex items-center justify-center">
+                          {flashlightActive && (
+                            <div
+                              className="absolute inset-0 rounded-full bg-amber-400/30 blur-md transition-all duration-75"
+                              style={{
+                                transform: `scale(${1.0 + 0.6 * flashlightWaveIntensity})`,
+                                opacity: 0.3 + 0.7 * flashlightWaveIntensity
+                              }}
+                            />
+                          )}
+                          <div
+                            className="relative w-12 h-12 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/30 transition-transform duration-75"
+                            style={{
+                              transform: `scale(${0.92 + 0.16 * flashlightWaveIntensity})`
+                            }}
+                          >
+                            <Sun className={`w-6 h-6 ${flashlightActive ? 'text-amber-300 fill-amber-300 animate-spin-slow' : 'text-slate-600'}`} />
                           </div>
-                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold ${
-                            flashlightActive ? 'bg-amber-400 text-black' : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            {flashlightActive ? 'ACTIVE ILLUMINATION' : 'STANDBY'}
-                          </span>
                         </div>
 
-                        {/* Interactive Emitter and Power Controls */}
-                        <div className="grid grid-cols-3 gap-1 text-[8px] pt-1">
+                        <div>
+                          <div className="text-[11px] font-bold text-white flex items-center justify-center gap-1">
+                            <span>{flashlightMode === 'DUAL' ? 'Dual 360° Flash' : flashlightMode === 'FRONT' ? 'Front Flash' : 'Rear Flash'}</span>
+                            {flashlightActive && <Waves className="w-2.5 h-2.5 text-amber-400 animate-pulse" />}
+                          </div>
+                          <div className="flex items-center justify-center gap-1 text-[8px] mt-0.5">
+                            <span className={`px-1.5 py-0.2 rounded font-bold ${
+                              flashlightActive ? 'bg-amber-400 text-black' : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {flashlightActive ? `${flashlightWaveFormat.replace('_', ' ')}` : 'STANDBY'}
+                            </span>
+                            {flashlightActive && (
+                              <span className="text-amber-400 font-bold">
+                                {Math.round(flashlightWaveIntensity * 100)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Waving Format Selector Pills */}
+                        <div className="grid grid-cols-3 gap-0.5 text-[7px] pt-0.5">
+                          {[
+                            { id: 'SINE_WAVE', label: 'Sine' },
+                            { id: 'DUAL_ALTERNATING', label: 'Dual' },
+                            { id: 'STROBE_BURST', label: 'Strobe' },
+                            { id: 'SOS_BEACON', label: 'SOS' },
+                            { id: 'HEARTBEAT', label: 'Heart' },
+                            { id: 'CONSTANT', label: 'Solid' }
+                          ].map(fmt => (
+                            <button
+                              key={fmt.id}
+                              onClick={() => {
+                                setFlashlightWaveFormat(fmt.id as FlashlightWaveFormat);
+                                if (!flashlightActive) {
+                                  setFlashlightActive(true);
+                                  setFlashlightRemainingSeconds(60);
+                                  setFlashlightTotalSeconds(60);
+                                }
+                                webTorchActuator.triggerHapticWave(fmt.id as FlashlightWaveFormat);
+                                webTorchActuator.playWaveChime(fmt.id as FlashlightWaveFormat);
+                              }}
+                              className={`py-0.5 px-1 rounded border cursor-pointer ${
+                                flashlightWaveFormat === fmt.id
+                                  ? 'bg-amber-500 text-black font-bold border-amber-300'
+                                  : 'bg-slate-950 text-slate-400 border-slate-900 hover:text-white'
+                              }`}
+                            >
+                              {fmt.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Emitter Target Buttons */}
+                        <div className="grid grid-cols-3 gap-1 text-[8px]">
                           {(['BACK', 'FRONT', 'DUAL'] as const).map(m => (
                             <button
                               key={m}
@@ -5665,8 +6152,8 @@ export function App() {
                                 setFlashlightMode(m);
                                 triggerHapticFeedback('TICK');
                               }}
-                              className={`p-1 rounded border cursor-pointer ${
-                                flashlightMode === m ? 'bg-amber-500 text-black font-bold border-amber-400' : 'bg-slate-900 text-slate-400 border-slate-800'
+                              className={`p-0.5 rounded border cursor-pointer ${
+                                flashlightMode === m ? 'bg-amber-500/30 text-amber-300 font-bold border-amber-400' : 'bg-slate-900 text-slate-400 border-slate-800'
                               }`}
                             >
                               {m}
@@ -5674,6 +6161,7 @@ export function App() {
                           ))}
                         </div>
 
+                        {/* Main Power Toggle Button */}
                         <button
                           onClick={() => {
                             const nextState = !flashlightActive;
@@ -5681,24 +6169,54 @@ export function App() {
                             if (nextState) {
                               setFlashlightRemainingSeconds(60);
                               setFlashlightTotalSeconds(60);
+                            } else {
+                              setPhysicalTorchActive(false);
+                              webTorchActuator.stopWave();
+                              webTorchActuator.setHardwareTorch(false);
                             }
                             try { playWebAudioChime(); } catch (_e) {}
                             triggerHapticFeedback(nextState ? 'BURST' : 'TICK');
                           }}
-                          className={`w-full py-1.5 rounded-lg font-bold text-[10px] border transition-colors cursor-pointer ${
+                          className={`w-full py-1 rounded-lg font-bold text-[9px] border transition-colors cursor-pointer ${
                             flashlightActive
-                              ? 'bg-amber-500 hover:bg-amber-400 text-black border-amber-400'
+                              ? 'bg-amber-500 hover:bg-amber-400 text-black border-amber-400 shadow-sm shadow-amber-500/20'
                               : 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-amber-800'
                           }`}
                         >
                           {flashlightActive ? 'Turn Off Flashlight' : 'Turn On Torch (60s)'}
                         </button>
 
-                        {flashlightActive && flashlightRemainingSeconds !== null && (
-                          <div className="text-[10px] font-mono text-amber-300 font-bold">
-                            {flashlightRemainingSeconds}s Watchdog Auto-Off
-                          </div>
-                        )}
+                        {/* Physical Hardware Torch & Watchdog Info */}
+                        <div className="flex items-center justify-between text-[8px] text-slate-400 pt-0.5">
+                          <button
+                            onClick={async () => {
+                              const next = !physicalTorchActive;
+                              if (next) {
+                                const ok = await webTorchActuator.acquireCameraTorch();
+                                setPhysicalTorchSupported(ok);
+                                webTorchActuator.setHardwareTorch(true);
+                                setPhysicalTorchActive(true);
+                                setFlashlightActive(true);
+                              } else {
+                                webTorchActuator.setHardwareTorch(false);
+                                setPhysicalTorchActive(false);
+                              }
+                            }}
+                            className={`px-1 py-0.2 rounded border cursor-pointer ${
+                              physicalTorchActive ? 'bg-emerald-950 border-emerald-500 text-emerald-300 font-bold' : 'bg-black border-slate-800 text-slate-500'
+                            }`}
+                          >
+                            {physicalTorchActive ? 'Real Torch: ON' : 'Web Torch'}
+                          </button>
+
+                          {flashlightActive && flashlightRemainingSeconds !== null ? (
+                            <span className="font-bold text-amber-300">
+                              {flashlightRemainingSeconds}s Watchdog
+                            </span>
+                          ) : (
+                            <span>Watchdog 60s</span>
+                          )}
+                        </div>
                       </div>
                     ) : activePhoneTab === 'CINEMA' ? (
                       /* TELUGU CINEMA VIEW WITH MEMORYSTACK INTERACTION */
