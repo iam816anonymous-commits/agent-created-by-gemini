@@ -88,7 +88,8 @@ fun DashboardScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val isRunning = engineState.status == ExecutionStatus.PARSING ||
+    val isRunning = engineState.status == ExecutionStatus.ROUTING ||
+            engineState.status == ExecutionStatus.PARSING ||
             engineState.status == ExecutionStatus.RESOLVING_TARGET ||
             engineState.status == ExecutionStatus.EXECUTING_ACTION ||
             engineState.status == ExecutionStatus.WAITING_OBSERVATION ||
@@ -388,6 +389,24 @@ fun DashboardScreen(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+
+                if (engineState.activeBackendName != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = CyberCyanPrimary.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyanPrimary.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = "PLAN ROUTER: Tier ${engineState.activeTier ?: 1} (${engineState.activeBackendName})",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberCyanPrimary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
 
                 if (isRunning) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -845,6 +864,7 @@ fun DashboardScreen(
 fun StatusChip(status: ExecutionStatus) {
     val (color, text) = when (status) {
         ExecutionStatus.IDLE -> Pair(MaterialTheme.colorScheme.outline, "IDLE")
+        ExecutionStatus.ROUTING -> Pair(CyberCyanPrimary, "ROUTING")
         ExecutionStatus.PARSING -> Pair(CyberCyanPrimary, "PARSING")
         ExecutionStatus.RESOLVING_TARGET -> Pair(StatusRunning, "RESOLVING")
         ExecutionStatus.EXECUTING_ACTION -> Pair(StatusRunning, "EXECUTING")

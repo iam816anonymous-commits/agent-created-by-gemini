@@ -457,7 +457,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             val matchingSkill = allSkills.value.firstOrNull { skillEntity ->
                 val triggers = skillEntity.triggerPhrases.split(",").map { it.trim().lowercase() }
                 val lower = prompt.trim().lowercase()
-                triggers.any { t -> t.isNotBlank() && (lower == t || lower.contains(t) || t.contains(lower)) }
+                triggers.any { t -> t.isNotBlank() && lower == t }
             }
             if (matchingSkill != null && matchingSkill.commandsPayload.isNotBlank()) {
                 val decoded = taskSynthesizer.decodeCommands(matchingSkill.commandsPayload)
@@ -477,13 +477,25 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun cancelTask() {
+        engine.cancelCurrentTask("Cancelled from Agent UI")
+    }
+
+    fun stopTask() {
+        engine.stopExecution()
+    }
+
+    fun triggerEmergencyKillSwitch() {
+        engine.triggerEmergencyKillSwitch("Triggered via UI Emergency Control")
+    }
+
     fun executeTaskDirect(prompt: String) {
         if (prompt.isNotBlank()) {
             _uiState.update { it.copy(taskInput = prompt) }
             val matchingSkill = allSkills.value.firstOrNull { skillEntity ->
                 val triggers = skillEntity.triggerPhrases.split(",").map { it.trim().lowercase() }
                 val lower = prompt.trim().lowercase()
-                triggers.any { t -> t.isNotBlank() && (lower == t || lower.contains(t) || t.contains(lower)) }
+                triggers.any { t -> t.isNotBlank() && lower == t }
             }
             if (matchingSkill != null && matchingSkill.commandsPayload.isNotBlank()) {
                 val decoded = taskSynthesizer.decodeCommands(matchingSkill.commandsPayload)
@@ -623,10 +635,6 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 builtIn.forEach { repository.saveSkill(it) }
             }
         }
-    }
-
-    fun stopTask() {
-        engine.stopExecution()
     }
 
     val killSwitchTriggeredCount = LocalAgentAccessibilityService.killSwitchTriggeredCount

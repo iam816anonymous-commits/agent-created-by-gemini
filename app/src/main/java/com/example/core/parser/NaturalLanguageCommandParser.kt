@@ -436,14 +436,44 @@ class NaturalLanguageCommandParser(
             return commands
         }
 
-        // Fallback: parse as single element click
-        commands.add(
-            TaskCommand.ClickElement(
-                selector = TargetSelector(text = trimmed),
-                targetLabel = trimmed
+        // Case 7: Explicit short UI target (e.g. "Submit", "Cancel", "OK", "Allow", "Next")
+        // Only accept if short (<= 3 words, <= 25 chars), not a sentence/question, and without conversational keywords
+        val words = trimmed.split(Regex("""\s+"""))
+        val isConversational = normalized.contains("?") ||
+            normalized.startsWith("what ") || normalized.startsWith("how ") ||
+            normalized.startsWith("why ") || normalized.startsWith("who ") ||
+            normalized.startsWith("where ") || normalized.startsWith("tell ") ||
+            normalized.startsWith("can you") || normalized.startsWith("could you") ||
+            normalized.startsWith("explain ") || normalized.startsWith("help ")
+
+        if (words.size <= 3 && trimmed.length <= 25 && !isConversational) {
+            commands.add(
+                TaskCommand.ClickElement(
+                    selector = TargetSelector(text = trimmed),
+                    targetLabel = trimmed
+                )
             )
-        )
-        return commands
+            return commands
+        }
+
+        // Issue A07: Reject unsupported natural-language requests explicitly
+        return emptyList()
+    }
+
+    sealed interface ParseResult {
+        data class Success(val commands: List<TaskCommand>) : ParseResult
+        data class Unsupported(val reason: String) : ParseResult
+    }
+
+    fun parseWithResult(prompt: String): ParseResult {
+        val cmds = parse(prompt)
+        return if (cmds.isNotEmpty()) {
+            ParseResult.Success(cmds)
+        } else {
+            ParseResult.Unsupported(
+                "Instruction '$prompt' is unsupported or cannot be safely mapped to deterministic device actions."
+            )
+        }
     }
 
     private fun extractCalculationTokens(prompt: String): List<String> {

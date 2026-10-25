@@ -290,4 +290,20 @@ class ActuatorController(private val context: Context) {
             ActuatorType.SETTINGS_DISPLAY -> openSystemSetting(Settings.ACTION_DISPLAY_SETTINGS)
         }
     }
+
+    /**
+     * Safely aborts and powers down all active hardware actuators (Issue A04).
+     */
+    fun resetAllActuators() {
+        try {
+            hardwareManager.stopTorchEffects()
+        } catch (_: Exception) {}
+        try {
+            vibrator?.cancel()
+        } catch (_: Exception) {}
+        try {
+            _isTorchOn.value = false
+        } catch (_: Exception) {}
+    }
 }
+

@@ -38,14 +38,18 @@ data class AgentEngineState(
     val latestObservation: UiSnapshot? = null,
     val statusMessage: String = "Ready for autonomous task execution",
     val failureReason: String? = null,
-    val isLiveMode: Boolean = false,
+    val executionMode: com.example.core.model.ExecutionMode = com.example.core.model.ExecutionMode.LIVE_DEVICE,
+    val isLiveMode: Boolean = executionMode == com.example.core.model.ExecutionMode.LIVE_DEVICE,
     val startTimestampMs: Long = 0L,
     val durationMs: Long = 0L,
     val scrapedResearchResult: com.example.core.model.ResearchScrapeResult? = null,
     val activeTimerCountdownSec: Int? = null,
     val currentThought: com.example.core.model.CognitiveThought? = null,
     val thoughtChain: List<com.example.core.model.CognitiveThought> = emptyList(),
-    val cognitiveMode: String = "100% On-Device Heuristic Brain (Zero Cloud Token)"
+    val cognitiveMode: String = "100% On-Device Heuristic Brain (Zero Cloud Token)",
+    val activeTier: Int? = null,
+    val activeBackendName: String? = null,
+    val intentConfidence: Float? = null
 )
 
 class AgentExecutionEngine(
@@ -60,8 +64,14 @@ class AgentExecutionEngine(
     val cognitiveBrain: CognitiveBrainEngine = CognitiveBrainEngine(),
     val memoryBudgetManager: com.example.core.memory.MemoryBudgetManager = com.example.core.memory.MemoryBudgetManager(context),
     val approvalGate: com.example.core.approval.TaskApprovalGate = com.example.core.approval.TaskApprovalGate(),
-    var intentRouter: com.example.core.intent.HierarchicalIntentRouter? = null
+    intentRouter: com.example.core.intent.HierarchicalIntentRouter? = null
 ) {
+    var intentRouter: com.example.core.intent.HierarchicalIntentRouter = intentRouter ?: com.example.core.intent.HierarchicalIntentRouter(
+        fastPathBackend = com.example.core.intent.DeterministicRulesBackend(parser),
+        localSlmBackend = com.example.core.intent.LocalSlmBackend(),
+        cloudGeminiBackend = com.example.core.intent.GeminiCloudBackend(brainEngine = cognitiveBrain)
+    )
+
     private val engineScope = CoroutineScope(Dispatchers.Default)
     private var executionJob: Job? = null
 
@@ -88,14 +98,26 @@ class AgentExecutionEngine(
     var maxRetries: Int = 2
     var stabilizationDelayMs: Long = 800L
 
-    fun startTask(prompt: String, runAsBenchmark: Boolean = false) {
+    fun startTask(
+        prompt: String,
+        mode: com.example.core.model.ExecutionMode = com.example.core.model.ExecutionMode.LIVE_DEVICE,
+        predefinedCommands: List<TaskCommand>? = null
+    ) {
         if (executionJob?.isActive == true) {
             executionJob?.cancel()
         }
 
         val service = LocalAgentAccessibilityService.instance
-        val isServiceActive = service != null && LocalAgentAccessibilityService.isServiceConnected.value
-        val useLive = !runAsBenchmark && isServiceActive
+        val isServiceConnected = service != null && LocalAgentAccessibilityService.isServiceConnected.value
+
+        // Enforce mode consistency (Issue A02)
+        val effectiveMode = when (mode) {
+            com.example.core.model.ExecutionMode.LIVE_DEVICE -> {
+                if (isServiceConnected) com.example.core.model.ExecutionMode.LIVE_DEVICE
+                else com.example.core.model.ExecutionMode.SIMULATION
+            }
+            else -> mode
+        }
 
         val executionId = UUID.randomUUID().toString()
         val startTime = System.currentTimeMillis()
@@ -104,24 +126,27 @@ class AgentExecutionEngine(
             it.copy(
                 executionId = executionId,
                 taskPrompt = prompt,
-                status = ExecutionStatus.PARSING,
-                totalSteps = 0,
+                status = ExecutionStatus.ROUTING,
+                totalSteps = predefinedCommands?.size ?: 0,
                 currentStepIndex = 0,
-                currentCommandName = "Parsing Command",
+                currentCommandName = "Routing Intent",
                 steps = emptyList(),
                 preSnapshot = null,
                 postSnapshot = null,
-                statusMessage = "Normalizing natural language into structured plan...",
+                statusMessage = "Evaluating intent router [Mode: $effectiveMode]...",
                 failureReason = null,
-                isLiveMode = useLive,
+                executionMode = effectiveMode,
                 startTimestampMs = startTime,
-                durationMs = 0L
+                durationMs = 0L,
+                activeTier = null,
+                activeBackendName = null,
+                intentConfidence = null
             )
         }
 
         executionJob = engineScope.launch {
             try {
-                executeAutonomousPlan(executionId, prompt, null, useLive, startTime)
+                executeAutonomousPlan(executionId, prompt, predefinedCommands, effectiveMode, startTime)
             } catch (e: CancellationException) {
                 handleCancellation(executionId, startTime)
             } catch (e: Exception) {
@@ -130,77 +155,81 @@ class AgentExecutionEngine(
         }
     }
 
+    fun startTask(prompt: String, runAsBenchmark: Boolean) {
+        val mode = if (runAsBenchmark) com.example.core.model.ExecutionMode.BENCHMARK else com.example.core.model.ExecutionMode.LIVE_DEVICE
+        startTask(prompt, mode, null)
+    }
+
     fun startCustomTask(commands: List<TaskCommand>, prompt: String, runAsBenchmark: Boolean = false) {
-        if (executionJob?.isActive == true) {
-            executionJob?.cancel()
-        }
-
-        val service = LocalAgentAccessibilityService.instance
-        val isServiceActive = service != null && LocalAgentAccessibilityService.isServiceConnected.value
-        val useLive = !runAsBenchmark && isServiceActive
-
-        val executionId = UUID.randomUUID().toString()
-        val startTime = System.currentTimeMillis()
-
-        _state.update {
-            it.copy(
-                executionId = executionId,
-                taskPrompt = prompt,
-                status = ExecutionStatus.WAITING_OBSERVATION,
-                totalSteps = commands.size,
-                currentStepIndex = 0,
-                currentCommandName = "Initializing Synthesized Task",
-                steps = emptyList(),
-                preSnapshot = null,
-                postSnapshot = null,
-                statusMessage = "Executing synthesized task with ${commands.size} step(s)...",
-                failureReason = null,
-                isLiveMode = useLive,
-                startTimestampMs = startTime,
-                durationMs = 0L
-            )
-        }
-
-        executionJob = engineScope.launch {
-            try {
-                executeAutonomousPlan(executionId, prompt, commands, useLive, startTime)
-            } catch (e: CancellationException) {
-                handleCancellation(executionId, startTime)
-            } catch (e: Exception) {
-                handleFatalError(executionId, e.message ?: "Unknown error", startTime)
-            }
-        }
+        val mode = if (runAsBenchmark) com.example.core.model.ExecutionMode.BENCHMARK else com.example.core.model.ExecutionMode.LIVE_DEVICE
+        startTask(prompt, mode, commands)
     }
 
     private suspend fun executeAutonomousPlan(
         executionId: String,
         prompt: String,
         predefinedCommands: List<TaskCommand>?,
-        useLive: Boolean,
+        mode: com.example.core.model.ExecutionMode,
         startTime: Long
     ) {
-        repository.log("INFO", "Engine", "Starting execution '$executionId': $prompt", executionId)
+        repository.log("INFO", "Engine", "Starting execution '$executionId' [Mode: $mode]: $prompt", executionId)
 
-        // Step 1: Normalize task via HierarchicalIntentRouter or deterministic fallback
+        // Step 1: Normalize task via HierarchicalIntentRouter or deterministic fallback (A01, A07, A08)
         val commands = if (predefinedCommands != null) {
             predefinedCommands
         } else {
             val router = intentRouter
-            if (router != null) {
-                val routeRes = router.route(context, prompt, null)
-                if (routeRes.isOfflineDegraded) {
-                    val reason = "Device is offline and intelligence backend unreachable (0% hallucination fallback)."
-                    completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, useLive)
+            var routedCommands: List<TaskCommand>? = null
+
+            _state.update { it.copy(status = ExecutionStatus.ROUTING, statusMessage = "Evaluating hierarchical intent router...") }
+            val activePackage = LocalAgentAccessibilityService.lastEventPackage.value.ifBlank { null }
+            val routeRes = router.route(context, prompt, activePackage)
+            if (routeRes.isOfflineDegraded) {
+                val reason = "Device is offline and intelligence backend unreachable (0% hallucination fallback)."
+                completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, mode)
+                return
+            }
+
+                if (routeRes.steps.isNotEmpty()) {
+                    when (val valResult = com.example.core.intent.PlanSchemaValidator.validateAndMap(routeRes.steps)) {
+                        is com.example.core.intent.PlanSchemaValidator.ValidationResult.Valid -> {
+                            routedCommands = valResult.commands
+                            repository.log(
+                                "INFO",
+                                "IntentRouter",
+                                "Plan accepted from Tier ${routeRes.sourceTier} [${routeRes.backendName}] (${routedCommands.size} steps, latency ${routeRes.latencyMs}ms, provenance ${routeRes.provenance})",
+                                executionId
+                            )
+                            _state.update {
+                                it.copy(
+                                    activeTier = routeRes.sourceTier,
+                                    activeBackendName = routeRes.backendName,
+                                    intentConfidence = routeRes.confidence
+                                )
+                            }
+                        }
+                        is com.example.core.intent.PlanSchemaValidator.ValidationResult.Invalid -> {
+                            val reason = "Plan validation failed for backend ${routeRes.backendName}: ${valResult.errors.joinToString("; ")}"
+                            repository.log("ERROR", "IntentRouter", reason, executionId)
+                            completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, mode)
+                            return
+                        }
+                    }
+                }
+
+            if (routedCommands != null && routedCommands.isNotEmpty()) {
+                routedCommands
+            } else {
+                _state.update { it.copy(status = ExecutionStatus.PARSING, statusMessage = "Parsing natural language command...") }
+                val parsed = parser.parse(prompt)
+                if (parsed.isEmpty()) {
+                    val reason = "Unsupported or uninterpretable request: '$prompt'. The agent cannot safely plan actions for this instruction."
+                    repository.log("WARN", "Parser", reason, executionId)
+                    completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, mode)
                     return
                 }
+                parsed
             }
-            parser.parse(prompt)
-        }
-
-        if (commands.isEmpty()) {
-            val reason = "Could not parse any actionable commands from prompt: '$prompt'"
-            completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, useLive)
-            return
         }
 
         // Pre-Flight Human Approval Gate Assessment
@@ -215,6 +244,21 @@ class AgentExecutionEngine(
         val plan = approvalGate.proposePlan(prompt, (commands.firstOrNull() as? TaskCommand.LaunchApp)?.packageName, proposedSteps)
         if (plan.requiresElevatedConfirmation) {
             repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Elevated gate active.", executionId)
+        }
+
+        // Live vs Benchmark Mode Enforcement (A02, A01)
+        if (mode == com.example.core.model.ExecutionMode.LIVE_DEVICE && LocalAgentAccessibilityService.instance == null) {
+            val requiresAccessibility = commands.any {
+                it is TaskCommand.ClickElement || it is TaskCommand.EnterText ||
+                it is TaskCommand.Scroll || it is TaskCommand.OpenDrawer ||
+                it is TaskCommand.WaitForElement || (it is TaskCommand.VerifyCondition && it.rule !is com.example.core.model.VerificationRule.AlwaysPass)
+            }
+            if (requiresAccessibility) {
+                val reason = "Accessibility service is disconnected in LIVE_DEVICE mode. Cannot observe live screen or dispatch physical gestures. Enable 'LocalAgent Automation Service' or run in BENCHMARK mode."
+                repository.log("ERROR", "Engine", reason, executionId)
+                completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, reason, emptyList(), startTime, mode)
+                return
+            }
         }
 
         _state.update {
@@ -267,11 +311,44 @@ class AgentExecutionEngine(
             var retryCount = 0
 
             while (retryCount <= maxRetries && stepOutcome == null) {
+                // Issue A05: Re-observe state before retrying non-idempotent action
+                if (retryCount > 0) {
+                    val freshObs = captureFreshObservation()
+                    if (freshObs != null && preObs != null) {
+                        val recheck = verifier.verify(
+                            command = command,
+                            preSnapshot = preObs,
+                            postSnapshot = freshObs,
+                            actionDispatchedTimestampMs = stepStartTime
+                        )
+                        if (recheck.status == StepStatus.SUCCESS) {
+                            repository.log(
+                                "INFO",
+                                "Engine",
+                                "Step ${index + 1} postcondition already satisfied upon re-observation before retry: ${recheck.reason}. Skipping redundant actuation.",
+                                executionId
+                            )
+                            stepOutcome = StepExecutionRecord(
+                                stepIndex = index + 1,
+                                commandSummary = command.displayName,
+                                targetSelector = extractTargetSelectorDesc(command),
+                                dispatchedAction = "Verified existing state without re-dispatch (Idempotency Guard)",
+                                preSnapshotId = preObs.id,
+                                postSnapshotId = freshObs.id,
+                                status = StepStatus.SUCCESS,
+                                verificationDetails = "Observed postcondition satisfied without duplicate actuation: ${recheck.reason}",
+                                durationMs = System.currentTimeMillis() - stepStartTime
+                            )
+                            break
+                        }
+                    }
+                }
+
                 val stepResult = withTimeoutOrNull(stepTimeoutMs) {
                     executeSingleStep(
                         command = command,
                         stepIndex = index + 1,
-                        useLive = useLive,
+                        mode = mode,
                         stepStartTime = stepStartTime,
                         simulatedState = simulatedBenchmarkState,
                         onSimulatedStateUpdate = { simulatedBenchmarkState = it }
@@ -371,7 +448,7 @@ class AgentExecutionEngine(
                     val recRecord = executeSingleStep(
                         command = recCmd,
                         stepIndex = index + 1,
-                        useLive = useLive,
+                        mode = mode,
                         stepStartTime = System.currentTimeMillis(),
                         simulatedState = simulatedBenchmarkState,
                         onSimulatedStateUpdate = { simulatedBenchmarkState = it }
@@ -385,7 +462,7 @@ class AgentExecutionEngine(
 
                 if (!recoveryPassed) {
                     val failMsg = "Step ${index + 1} (${command.displayName}) failed verification even after strategy adaptation: ${finalRecord.verificationDetails}"
-                    completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, failMsg, executedRecords, startTime, useLive)
+                    completeExecution(executionId, ExecutionStatus.COMPLETED_FAILURE, failMsg, executedRecords, startTime, mode)
                     return
                 } else {
                     repository.log("INFO", "RecoveryEngine", "Recovery successful! Strategy '${recoveryPlan.strategyName}' overcame failure.", executionId)
@@ -393,18 +470,38 @@ class AgentExecutionEngine(
             }
         }
 
-        completeExecution(executionId, ExecutionStatus.COMPLETED_SUCCESS, null, executedRecords, startTime, useLive)
+        completeExecution(executionId, ExecutionStatus.COMPLETED_SUCCESS, null, executedRecords, startTime, mode)
     }
 
     private suspend fun executeSingleStep(
         command: TaskCommand,
         stepIndex: Int,
-        useLive: Boolean,
+        mode: com.example.core.model.ExecutionMode,
         stepStartTime: Long,
         simulatedState: UiSnapshot,
         onSimulatedStateUpdate: (UiSnapshot) -> Unit
     ): StepExecutionRecord {
+        val useLive = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         val service = LocalAgentAccessibilityService.instance
+
+        if (useLive && service == null) {
+            val requiresService = command is TaskCommand.ClickElement || command is TaskCommand.EnterText ||
+                    command is TaskCommand.Scroll || command is TaskCommand.OpenDrawer ||
+                    command is TaskCommand.WaitForElement || command is TaskCommand.VerifyCondition
+            if (requiresService) {
+                return StepExecutionRecord(
+                    stepIndex = stepIndex,
+                    commandSummary = command.displayName,
+                    targetSelector = extractTargetSelectorDesc(command),
+                    dispatchedAction = null,
+                    preSnapshotId = null,
+                    postSnapshotId = null,
+                    status = StepStatus.FAILURE,
+                    verificationDetails = "Accessibility service unavailable in LIVE_DEVICE mode. Refusing to substitute simulated action.",
+                    durationMs = System.currentTimeMillis() - stepStartTime
+                )
+            }
+        }
 
         // 1. Capture Pre-Action Snapshot
         val preSnapshot = if (useLive && service != null) {
@@ -712,32 +809,45 @@ class AgentExecutionEngine(
         failureReason: String?,
         steps: List<StepExecutionRecord>,
         startTime: Long,
-        useLive: Boolean
+        mode: com.example.core.model.ExecutionMode
     ) {
         val totalDuration = System.currentTimeMillis() - startTime
         val successCount = steps.count { it.status == StepStatus.SUCCESS }
 
+        // Issue A03: Require evidence and postcondition verification before reporting success
+        val hasAnyFailure = steps.isEmpty() || steps.any { it.status != StepStatus.SUCCESS }
+        val effectiveStatus = if (status == ExecutionStatus.COMPLETED_SUCCESS && hasAnyFailure) {
+            ExecutionStatus.COMPLETED_FAILURE
+        } else {
+            status
+        }
+        val effectiveFailureReason = if (effectiveStatus == ExecutionStatus.COMPLETED_FAILURE && failureReason == null) {
+            "Execution completed without positive verification evidence across all steps."
+        } else {
+            failureReason
+        }
+
         repository.saveExecution(
             id = executionId,
             prompt = _state.value.taskPrompt,
-            status = status.name,
+            status = effectiveStatus.name,
             totalSteps = steps.size,
             successfulSteps = successCount,
             startTimestamp = startTime,
             endTimestamp = System.currentTimeMillis(),
             durationMs = totalDuration,
-            failureReason = failureReason,
-            isLiveExecution = useLive
+            failureReason = effectiveFailureReason,
+            isLiveExecution = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         )
 
-        val logMsg = "Execution finished with status: $status (Success: $successCount/${steps.size}, Duration: ${totalDuration}ms)"
-        repository.log(if (status == ExecutionStatus.COMPLETED_SUCCESS) "INFO" else "ERROR", "Engine", logMsg, executionId)
+        val logMsg = "Execution finished with status: $effectiveStatus (Success: $successCount/${steps.size}, Duration: ${totalDuration}ms)"
+        repository.log(if (effectiveStatus == ExecutionStatus.COMPLETED_SUCCESS) "INFO" else "ERROR", "Engine", logMsg, executionId)
 
         _state.update {
             it.copy(
-                status = status,
-                failureReason = failureReason,
-                statusMessage = if (status == ExecutionStatus.COMPLETED_SUCCESS) "Task verified successfully!" else "Execution stopped: ${failureReason ?: "Unknown failure"}",
+                status = effectiveStatus,
+                failureReason = effectiveFailureReason,
+                statusMessage = if (effectiveStatus == ExecutionStatus.COMPLETED_SUCCESS) "Task verified successfully with observed evidence!" else "Execution stopped: ${effectiveFailureReason ?: "Verification failed"}",
                 durationMs = totalDuration
             )
         }
@@ -745,6 +855,10 @@ class AgentExecutionEngine(
 
     private suspend fun handleCancellation(executionId: String, startTime: Long) {
         val totalDuration = System.currentTimeMillis() - startTime
+        timerCountdownJob?.cancel()
+        timerCountdownJob = null
+        actuatorController.resetAllActuators()
+
         repository.saveExecution(
             id = executionId,
             prompt = _state.value.taskPrompt,
@@ -757,40 +871,62 @@ class AgentExecutionEngine(
             failureReason = "Aborted by user",
             isLiveExecution = _state.value.isLiveMode
         )
-        repository.log("WARN", "Engine", "Task execution aborted by user", executionId)
+        repository.log("WARN", "Engine", "Task execution aborted by user. Actuators reset safely.", executionId)
 
         _state.update {
             it.copy(
                 status = ExecutionStatus.ABORTED_BY_USER,
-                statusMessage = "Execution aborted by user.",
+                statusMessage = "Execution aborted by user. Actuators deactivated.",
                 failureReason = "User clicked Stop",
-                durationMs = totalDuration
+                durationMs = totalDuration,
+                activeTimerCountdownSec = null
             )
         }
     }
 
     private suspend fun handleFatalError(executionId: String, message: String, startTime: Long) {
         val totalDuration = System.currentTimeMillis() - startTime
+        timerCountdownJob?.cancel()
+        timerCountdownJob = null
+        actuatorController.resetAllActuators()
+
         repository.log("ERROR", "Engine", "Fatal engine failure: $message", executionId)
         _state.update {
             it.copy(
                 status = ExecutionStatus.COMPLETED_FAILURE,
                 statusMessage = "Fatal error: $message",
                 failureReason = message,
-                durationMs = totalDuration
+                durationMs = totalDuration,
+                activeTimerCountdownSec = null
             )
         }
     }
 
-    fun stopExecution() {
-        if (executionJob?.isActive == true) {
-            executionJob?.cancel()
+    fun cancelCurrentTask(reason: String = "Task execution cancelled by user") {
+        executionJob?.cancel()
+        timerCountdownJob?.cancel()
+        timerCountdownJob = null
+        actuatorController.resetAllActuators()
+        _state.update {
+            it.copy(
+                status = ExecutionStatus.ABORTED_BY_USER,
+                statusMessage = "Execution cancelled. All actuators safely deactivated.",
+                failureReason = reason,
+                activeTimerCountdownSec = null
+            )
         }
+        repository.log("WARN", "Engine", "Task explicitly cancelled: $reason")
+    }
+
+    fun stopExecution() {
+        cancelCurrentTask("Task execution stopped by user")
     }
 
     fun triggerEmergencyKillSwitch(reason: String = "Physical Volume-Up Key double-pressed - Kill Switch") {
-        stopExecution()
+        executionJob?.cancel()
         timerCountdownJob?.cancel()
+        timerCountdownJob = null
+        actuatorController.resetAllActuators()
         actuatorController.vibratePattern(longArrayOf(0, 100, 50, 100, 50, 200))
         actuatorController.playTone(toneType = android.media.ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, durationMs = 350)
         _state.update {

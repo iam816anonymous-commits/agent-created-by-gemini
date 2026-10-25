@@ -377,8 +377,16 @@ data class UiSnapshot(
     val allNodes: List<UiNode> get() = rootNode?.allDescendants ?: emptyList()
 }
 
+enum class ExecutionMode {
+    LIVE_DEVICE,
+    SIMULATION,
+    TEST,
+    BENCHMARK
+}
+
 enum class ExecutionStatus {
     IDLE,
+    ROUTING,
     PARSING,
     RESOLVING_TARGET,
     EXECUTING_ACTION,

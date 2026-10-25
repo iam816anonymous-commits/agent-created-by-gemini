@@ -534,4 +534,15 @@ class HardwareManager(private val context: Context) : SensorEventListener {
             ActuatorResult(false, "Intent launch failed: ${e.message}")
         }
     }
+
+    /**
+     * Cleanly deactivates all ongoing optical waves, countdowns, and torch emitters (Issue A04).
+     */
+    fun stopTorchEffects() {
+        timedTorchJob?.cancel()
+        timedTorchJob = null
+        _torchCountdownSeconds.value = null
+        setTorch(false, com.example.core.model.FlashlightTarget.DUAL)
+    }
 }
+
