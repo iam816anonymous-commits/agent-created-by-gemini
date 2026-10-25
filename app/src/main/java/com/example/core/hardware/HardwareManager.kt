@@ -105,10 +105,10 @@ class HardwareManager(private val context: Context) : SensorEventListener {
             if (level >= 0 && scale > 0) {
                 ((level / scale.toFloat()) * 100).toInt()
             } else {
-                100
+                -1 // Unknown / unavailable telemetry
             }
         } catch (_: Exception) {
-            100
+            -1 // Unknown / unavailable telemetry
         }
     }
 

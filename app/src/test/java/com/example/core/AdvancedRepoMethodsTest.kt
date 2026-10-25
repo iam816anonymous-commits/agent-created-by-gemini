@@ -193,7 +193,7 @@ class AdvancedRepoMethodsTest {
             stepBudget = 2,
             completionCriteriaDescription = "Find item",
             evaluateCompletion = { false }, // Never completes
-            rollbackCommands = listOf(TaskCommand.ClickElement(com.example.core.model.TargetSelector(text = "Back"), targetLabel = "rollback_key"))
+            rollbackCommands = listOf(TaskCommand.SwipeGesture(0.0f, 0.5f, 0.3f, 0.5f, displayName = "rollback_key"))
         )
 
         val plan = planner.initializePlan("plan_fail", "Fail test", listOf(subGoal1))

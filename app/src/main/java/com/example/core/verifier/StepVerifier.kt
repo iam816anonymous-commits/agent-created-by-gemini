@@ -449,7 +449,7 @@ class StepVerifier(
     ): VerificationOutcome {
         return when (rule) {
             is VerificationRule.AlwaysPass -> {
-                VerificationOutcome(status = StepStatus.SUCCESS, reason = "Verification rule AlwaysPass satisfied", confidence = 1.0f)
+                VerificationOutcome(status = StepStatus.INCONCLUSIVE, reason = "AlwaysPass rule provides zero postcondition verification evidence", confidence = 0.0f)
             }
             is VerificationRule.DisplayContainsText -> {
                 val foundNode = postSnapshot.allNodes.firstOrNull { node ->

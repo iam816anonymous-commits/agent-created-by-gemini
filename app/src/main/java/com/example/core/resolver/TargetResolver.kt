@@ -31,11 +31,13 @@ class TargetResolver(
 
         val allNodes = snapshot.allNodes
         if (allNodes.isEmpty()) {
-            if (selector.fallbackNormalizedX != null && selector.fallbackNormalizedY != null) {
-                val screenW = 1080
-                val screenH = 2400
-                val px = (selector.fallbackNormalizedX * screenW).toInt()
-                val py = (selector.fallbackNormalizedY * screenH).toInt()
+            val normX = selector.fallbackNormalizedX
+            val normY = selector.fallbackNormalizedY
+            if (normX != null && normY != null && normX in 0.0f..1.0f && normY in 0.0f..1.0f) {
+                val screenW = snapshot.rootNode?.bounds?.width?.takeIf { it > 0 } ?: 1080
+                val screenH = snapshot.rootNode?.bounds?.height?.takeIf { it > 0 } ?: 2400
+                val px = (normX * screenW).toInt()
+                val py = (normY * screenH).toInt()
                 val fallbackNode = UiNode(
                     id = "coord_fallback_${px}_${py}",
                     packageName = snapshot.packageName,
@@ -55,8 +57,8 @@ class TargetResolver(
                 return ResolutionResult.Success(
                     match = TargetMatch(
                         node = fallbackNode,
-                        score = 45,
-                        matchReason = "Stage-4 Normalized Coordinate Fallback [${(selector.fallbackNormalizedX * 100).toInt()}%, ${(selector.fallbackNormalizedY * 100).toInt()}%]",
+                        score = 20,
+                        matchReason = "UNVERIFIED Stage-4 Normalized Coordinate Fallback [${(normX * 100).toInt()}%, ${(normY * 100).toInt()}%]",
                         clickCoordinates = Pair(px, py)
                     ),
                     candidateCount = 1
