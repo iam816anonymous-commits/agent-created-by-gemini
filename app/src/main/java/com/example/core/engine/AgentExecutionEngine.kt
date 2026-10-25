@@ -80,12 +80,14 @@ class AgentExecutionEngine(
             val mem = memoryBudgetManager.measureMemory()
             if (mem.isLowMemory || mem.heapAllocatedMb > 50.0) {
                 memoryBudgetManager.purgeTransientCaches()
-                repository.log(
-                    "WARN",
-                    "MemoryBudget",
-                    "4GB RAM Guardian: High heap (${mem.heapAllocatedMb}MB) or low available RAM (${mem.systemAvailableRamMb}MB). Proactively purged transient caches.",
-                    executionId
-                )
+                engineScope.launch {
+                    repository.log(
+                        "WARN",
+                        "MemoryBudget",
+                        "4GB RAM Guardian: High heap (${mem.heapAllocatedMb}MB) or low available RAM (${mem.systemAvailableRamMb}MB). Proactively purged transient caches.",
+                        executionId
+                    )
+                }
             }
         } catch (_: Exception) {}
     }
@@ -725,6 +727,18 @@ class AgentExecutionEngine(
                 actionDispatchTime = System.currentTimeMillis()
                 dispatchedActionDesc = "Independent Verification checkpoint"
             }
+
+            is TaskCommand.AddNote -> {
+                dispatchedActionDesc = "Added note content: '${command.noteContent}'"
+            }
+
+            is TaskCommand.ExportDurableVault -> {
+                dispatchedActionDesc = "Exported durable memory vault to ${command.destinationPath}"
+            }
+
+            is TaskCommand.MorningBriefing -> {
+                dispatchedActionDesc = "Generated daily morning briefing for ${command.dateString}"
+            }
         }
 
         // Allow UI to settle
@@ -800,6 +814,9 @@ class AgentExecutionEngine(
             is TaskCommand.Delay -> "${command.durationMs}ms"
             is TaskCommand.StartTimer -> "Timer: ${command.durationSeconds}s (${command.timerLabel})"
             is TaskCommand.WebResearch -> "Research: '${command.query}'"
+            is TaskCommand.AddNote -> "Note: '${command.noteContent}'"
+            is TaskCommand.ExportDurableVault -> "Vault: ${command.destinationPath}"
+            is TaskCommand.MorningBriefing -> "Briefing: ${command.dateString}"
         }
     }
 
@@ -915,7 +932,9 @@ class AgentExecutionEngine(
                 activeTimerCountdownSec = null
             )
         }
-        repository.log("WARN", "Engine", "Task explicitly cancelled: $reason")
+        engineScope.launch {
+            repository.log("WARN", "Engine", "Task explicitly cancelled: $reason")
+        }
     }
 
     fun stopExecution() {

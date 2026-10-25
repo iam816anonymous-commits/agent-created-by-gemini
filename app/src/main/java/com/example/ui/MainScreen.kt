@@ -86,6 +86,7 @@ fun MainScreen(viewModel: AgentViewModel) {
                         // Pulse status indicator
                         val pulseColor = when (engineState.status) {
                             ExecutionStatus.IDLE -> if (capabilities.isAccessibilityEnabled) StatusSuccess else StatusWarning
+                            ExecutionStatus.ROUTING,
                             ExecutionStatus.PARSING,
                             ExecutionStatus.RESOLVING_TARGET,
                             ExecutionStatus.EXECUTING_ACTION,

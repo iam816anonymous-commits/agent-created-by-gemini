@@ -20,7 +20,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class AdvancedRepoMethodsTest {
 
     private fun createMockSnapshot(nodes: List<UiNode>): UiSnapshot {
@@ -188,7 +193,7 @@ class AdvancedRepoMethodsTest {
             stepBudget = 2,
             completionCriteriaDescription = "Find item",
             evaluateCompletion = { false }, // Never completes
-            rollbackCommands = listOf(TaskCommand.PressBack("rollback_key"))
+            rollbackCommands = listOf(TaskCommand.ClickElement(com.example.core.model.TargetSelector(text = "Back"), targetLabel = "rollback_key"))
         )
 
         val plan = planner.initializePlan("plan_fail", "Fail test", listOf(subGoal1))

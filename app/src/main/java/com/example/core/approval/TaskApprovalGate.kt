@@ -58,7 +58,7 @@ class TaskApprovalGate {
         )
 
         private val DESTRUCTIVE_WORD_PATTERN = Pattern.compile(
-            "\\b(wipe data|factory reset|format storage|erase all|delete all|uninstall)\\b",
+            "\\b(wipe data|factory reset|format storage|erase all|delete all|delete permanently|uninstall)\\b",
             Pattern.CASE_INSENSITIVE
         )
 

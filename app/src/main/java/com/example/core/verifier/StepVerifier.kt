@@ -448,6 +448,9 @@ class StepVerifier(
         postSnapshot: UiSnapshot
     ): VerificationOutcome {
         return when (rule) {
+            is VerificationRule.AlwaysPass -> {
+                VerificationOutcome(status = StepStatus.SUCCESS, reason = "Verification rule AlwaysPass satisfied", confidence = 1.0f)
+            }
             is VerificationRule.DisplayContainsText -> {
                 val foundNode = postSnapshot.allNodes.firstOrNull { node ->
                     node.text?.contains(rule.expectedText, ignoreCase = true) == true ||

@@ -178,6 +178,9 @@ class TaskSynthesizer {
                 is TaskCommand.ControlActuator -> "ACTUATOR|${cmd.actuatorType.name}|${cmd.param}|${cmd.durationMs}"
                 is TaskCommand.StartTimer -> "START_TIMER|${cmd.durationSeconds}|${cmd.timerLabel}"
                 is TaskCommand.WebResearch -> "WEB_RESEARCH|${cmd.query}|${cmd.extractType}"
+                is TaskCommand.AddNote -> "ADD_NOTE|${cmd.noteContent}|${cmd.title}"
+                is TaskCommand.ExportDurableVault -> "EXPORT_VAULT|${cmd.destinationPath}"
+                is TaskCommand.MorningBriefing -> "BRIEFING|${cmd.dateString}"
                 is TaskCommand.VerifyCondition -> when (val rule = cmd.rule) {
                     is VerificationRule.DisplayContainsText -> "VERIFY_TEXT|${rule.expectedText}|${cmd.requirementDescription}"
                     is VerificationRule.PackageMatches -> "VERIFY_PKG|${rule.expectedPackage}|${cmd.requirementDescription}"

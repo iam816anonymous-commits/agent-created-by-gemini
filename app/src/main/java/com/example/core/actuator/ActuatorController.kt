@@ -239,9 +239,9 @@ class ActuatorController(private val context: Context) {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
-            ActuatorResult(true, "Launched settings intent: ${action.substringAfterLast(".")}")
+            ActuatorResult(true, "Launched system settings panel for ${action.substringAfterLast(".")} (Unverified system setting change)")
         } catch (e: Exception) {
-            ActuatorResult(false, "Failed to launch intent: ${e.message}")
+            ActuatorResult(false, "Failed to launch settings panel intent: ${e.message}")
         }
     }
 
@@ -271,9 +271,9 @@ class ActuatorController(private val context: Context) {
             ActuatorType.HAPTIC_IMPACT -> triggerHaptic("IMPACT")
             ActuatorType.SPEAKER_ALARM -> playTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 400)
             ActuatorType.SPEAKER_CONFIRM -> playConfirmationChime()
-            ActuatorType.BRIGHTNESS_LEVEL -> ActuatorResult(true, "Display brightness adjusted to target")
-            ActuatorType.NIGHT_SHIELD -> ActuatorResult(true, "Blue light night shield filter engaged")
-            ActuatorType.BATTERY_SAVER -> ActuatorResult(true, "Low power OLED mode and CPU throttling active")
+            ActuatorType.BRIGHTNESS_LEVEL -> openSystemSetting(Settings.ACTION_DISPLAY_SETTINGS)
+            ActuatorType.NIGHT_SHIELD -> openSystemSetting(Settings.ACTION_DISPLAY_SETTINGS)
+            ActuatorType.BATTERY_SAVER -> openSystemSetting(Settings.ACTION_BATTERY_SAVER_SETTINGS)
             ActuatorType.DURABLE_VAULT_SYNC -> ActuatorResult(true, "Synchronized durable state with external vault")
             ActuatorType.AUDIO_TONE -> playTone()
             ActuatorType.AUDIO_VOLUME -> {

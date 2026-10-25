@@ -20,7 +20,7 @@ data class SubGoal(
     var stepsConsumed: Int = 0,
     val completionCriteriaDescription: String,
     val evaluateCompletion: (UiSnapshot?) -> Boolean,
-    val rollbackCommands: List<TaskCommand> = listOf(TaskCommand.PressBack("rollback_back")),
+    val rollbackCommands: List<TaskCommand> = listOf(TaskCommand.ClickElement(com.example.core.model.TargetSelector(text = "Back"), targetLabel = "rollback_back")),
     var status: SubGoalStatus = SubGoalStatus.PENDING
 ) {
     val isBudgetExceeded: Boolean get() = stepsConsumed >= stepBudget

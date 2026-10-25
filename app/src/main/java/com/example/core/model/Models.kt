@@ -49,6 +49,7 @@ sealed interface VerificationRule {
     data class ElementExists(val selector: TargetSelector) : VerificationRule
     data class PackageMatches(val expectedPackage: String) : VerificationRule
     data class HierarchyChanged(val preActionNodeCount: Int) : VerificationRule
+    object AlwaysPass : VerificationRule
 }
 
 sealed interface TaskCommand {
@@ -211,6 +212,15 @@ enum class ActuatorType(val label: String) {
     DURABLE_VAULT_SYNC("External Shared Storage Brain Sync")
 }
 
+data class ScrapedMovieItem(
+    val title: String,
+    val year: String = "",
+    val genre: String = "",
+    val directorOrCast: String = "",
+    val status: String = "",
+    val ratingOrNote: String = ""
+)
+
 data class SearchHit(
     val title: String,
     val url: String,
@@ -221,16 +231,14 @@ data class ResearchScrapeResult(
     val query: String,
     val extractedCount: Int,
     val hits: List<SearchHit> = emptyList(),
+    val movies: List<ScrapedMovieItem> = emptyList(),
     val rawSummary: String,
     val scrapedAtMs: Long = System.currentTimeMillis(),
     val isOnline: Boolean = true,
     val isFailure: Boolean = false,
     val provenance: String = "LIVE_WEB_FETCH",
     val cacheAgeSeconds: Long = 0L
-) {
-    // Backwards compatibility accessor
-    val movies: List<SearchHit> get() = hits
-}
+)
 
 data class AgentSkill(
     val id: String = UUID.randomUUID().toString(),
@@ -272,7 +280,7 @@ data class DurableMemoryBackup(
     val version: Int = 1,
     val timestampMs: Long = System.currentTimeMillis(),
     val taskCount: Int = 0,
-    val deviceModel: String = "TECNO IN6",
+    val deviceModel: String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim().ifEmpty { "TECNO IN6" },
     val checksum: String = ""
 )
 
@@ -290,7 +298,7 @@ data class RecordedInteraction(
     val id: String = UUID.randomUUID().toString(),
     val timestampMs: Long = System.currentTimeMillis(),
     val actionType: ActionType,
-    val targetLabel: String,
+    val targetLabel: String = "",
     val targetSelector: TargetSelector? = null,
     val targetBounds: RectData? = null,
     val touchCoordinates: Pair<Int, Int>? = null,
