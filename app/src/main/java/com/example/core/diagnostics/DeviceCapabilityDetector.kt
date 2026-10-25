@@ -58,14 +58,14 @@ class DeviceCapabilityDetector(private val context: Context) {
         return enabledServices.contains(expectedServiceName) || enabledServices.contains(LocalAgentAccessibilityService::class.java.simpleName)
     }
 
-    fun getStorageMetrics(): Pair<Long, Long> {
+    fun getStorageMetrics(): Pair<Long, Long>? {
         return try {
             val stat = StatFs(Environment.getDataDirectory().path)
             val total = stat.totalBytes
             val available = stat.availableBytes
             Pair(total, available)
-        } catch (e: Exception) {
-            Pair(64L * 1024 * 1024 * 1024, 32L * 1024 * 1024 * 1024)
+        } catch (_: Exception) {
+            null
         }
     }
 }

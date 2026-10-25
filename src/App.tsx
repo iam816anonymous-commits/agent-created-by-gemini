@@ -95,6 +95,8 @@ import { AndroidMultiVersionHub } from './components/AndroidMultiVersionHub';
 import { LlamaJniBridgeStudio } from './components/LlamaJniBridgeStudio';
 import { webTorchActuator, FlashlightWaveFormat } from './utils/webTorchActuator';
 import { probeLiveDeviceHardware, DynamicDeviceTelemetry } from './utils/dynamicDeviceProbe';
+import { unifiedHardwareController } from './hardware/UnifiedHardwareController';
+import { HardwareOperationResult, SensorReading } from './hardware/types';
 
 // ==========================================
 // DOMAIN MODELS & SCHEMAS
@@ -352,8 +354,8 @@ export function App() {
   // ==========================================
   // PHYSICAL ENVIRONMENT & APP TOPOLOGY STATE (Step 1)
   // ==========================================
-  const [ambientLightLux, setAmbientLightLux] = useState<number>(145);
-  const [socTemperatureC, setSocTemperatureC] = useState<number>(36.2);
+  const [ambientLightLux, setAmbientLightLux] = useState<number | null>(null);
+  const [socTemperatureC, setSocTemperatureC] = useState<number | null>(null);
   const [thermalThrottled, setThermalThrottled] = useState<boolean>(false);
   const [isCalibratingEnv, setIsCalibratingEnv] = useState<boolean>(false);
   const [envCalibrationStep, setEnvCalibrationStep] = useState<string>('Sensors and 6 system apps 100% calibrated.');
@@ -1538,81 +1540,126 @@ export function App() {
       return;
     }
 
-    if (lower.startsWith('actuator')) {
+    if (lower.startsWith('actuator') || lower.startsWith('flash') || lower.startsWith('torch')) {
       if (lower.includes('chime')) {
-        playWebAudioChime();
-        addLine('[ACTUATOR] AudioManager: Synthesizing FX_KEY_CLICK confirmation chime tone.', 'pass');
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'audio_tone',
+          actionType: 'PLAY_TONE',
+          params: { tone: 'KEY_CLICK', durationMs: 60 }
+        }).then(res => {
+          playWebAudioChime();
+          addLine(`[ACTUATOR] ${res.status}: ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status.startsWith('SUCCESS') ? 'pass' : 'warn');
+        });
         return;
       }
       if (lower.includes('haptic tick')) {
-        triggerHapticFeedback('TICK');
-        addLine('[ACTUATOR] Vibrator: TICK haptic pattern triggered (20ms crisp tactile pulse).', 'pass');
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'vibrator',
+          actionType: 'HAPTIC_TICK'
+        }).then(res => {
+          triggerHapticFeedback('TICK');
+          addLine(`[ACTUATOR] ${res.status}: ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status.startsWith('SUCCESS') ? 'pass' : 'warn');
+        });
         return;
       }
       if (lower.includes('haptic burst')) {
-        triggerHapticFeedback('BURST');
-        addLine('[ACTUATOR] Vibrator: BURST waveform pattern triggered (50ms/50ms/50ms).', 'pass');
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'vibrator',
+          actionType: 'HAPTIC_BURST'
+        }).then(res => {
+          triggerHapticFeedback('BURST');
+          addLine(`[ACTUATOR] ${res.status}: ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status.startsWith('SUCCESS') ? 'pass' : 'warn');
+        });
         return;
       }
-      if (lower.includes('flash rear on')) {
-        setFlashlightActive(true);
-        setFlashlightMode('BACK');
-        addLine('[ACTUATOR] CameraManager: Rear Quad-LED torch enabled (Camera ID "0").', 'pass');
+      if (lower.includes('wifi')) {
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'network_wifi',
+          actionType: 'SET_ENABLED',
+          params: { enabled: !lower.includes('off') }
+        }).then(res => {
+          addLine(`[ACTUATOR] Wi-Fi (${res.status}): ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status === 'UNSUPPORTED' ? 'warn' : 'output');
+        });
         return;
       }
-      if (lower.includes('flash front on')) {
-        setFlashlightActive(true);
-        setFlashlightMode('FRONT');
-        addLine('[ACTUATOR] CameraManager: Front Dual-LED selfie flash enabled (Camera ID "1").', 'pass');
+      if (lower.includes('bluetooth') || lower.includes('bt')) {
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'bluetooth_adapter',
+          actionType: 'SET_ENABLED',
+          params: { enabled: !lower.includes('off') }
+        }).then(res => {
+          addLine(`[ACTUATOR] Bluetooth (${res.status}): ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status === 'UNSUPPORTED' ? 'warn' : 'output');
+        });
+        return;
+      }
+      if (lower.includes('flash rear on') || (lower.includes('torch on') && !lower.includes('front'))) {
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'camera_torch_back',
+          actionType: 'TORCH_ON',
+          params: { brightness: 1.0 }
+        }).then(res => {
+          setFlashlightActive(true);
+          setFlashlightMode('BACK');
+          addLine(`[ACTUATOR] Camera Torch (${res.status}): ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status === 'SUCCESS_VERIFIED' ? 'pass' : 'output');
+        });
+        return;
+      }
+      if (lower.includes('flash front on') || lower.includes('torch front on')) {
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'camera_torch_front',
+          actionType: 'TORCH_ON',
+          params: { brightness: 1.0 }
+        }).then(res => {
+          setFlashlightActive(true);
+          setFlashlightMode('FRONT');
+          addLine(`[ACTUATOR] Front Torch (${res.status}): ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, res.status === 'UNSUPPORTED' ? 'warn' : 'output');
+        });
         return;
       }
       if (lower.includes('flash strobe') || lower.includes('dual')) {
+        setFlashlightWaveFormat('STROBE_BURST');
         setFlashlightActive(true);
         setFlashlightMode('DUAL');
         triggerHapticFeedback('BURST');
-        addLine('[ACTUATOR] CameraManager: Dual 360° strobe mode enabled across both emitters.', 'warn');
+        addLine('[ACTUATOR] UnifiedHardwareController: Dual STROBE_BURST optical wave active.', 'warn');
         return;
       }
       if (lower.includes('flash wave') || lower.includes('torch wave') || lower.includes('waving')) {
         setFlashlightWaveFormat('SINE_WAVE');
         setFlashlightActive(true);
         setActivePhoneTab('FLASHLIGHT');
-        addLine('[ACTUATOR] CameraManager: Optical SINE_WAVE waving modulation engaged with haptic ripple.', 'pass');
-        return;
-      }
-      if (lower.includes('flash strobe') || lower.includes('strobe')) {
-        setFlashlightWaveFormat('STROBE_BURST');
-        setFlashlightActive(true);
-        setFlashlightMode('DUAL');
-        setActivePhoneTab('FLASHLIGHT');
-        triggerHapticFeedback('BURST');
-        addLine('[ACTUATOR] CameraManager: Dual 360° STROBE_BURST optical wave active.', 'warn');
+        addLine('[ACTUATOR] UnifiedHardwareController: SINE_WAVE waving modulation engaged with haptic ripple.', 'pass');
         return;
       }
       if (lower.includes('flash sos') || lower.includes('sos')) {
         setFlashlightWaveFormat('SOS_BEACON');
         setFlashlightActive(true);
         setActivePhoneTab('FLASHLIGHT');
-        addLine('[ACTUATOR] CameraManager: International Morse Code SOS_BEACON (... --- ...) waving pattern active.', 'pass');
+        addLine('[ACTUATOR] UnifiedHardwareController: Morse Code SOS_BEACON pattern active.', 'pass');
         return;
       }
       if (lower.includes('heartbeat')) {
         setFlashlightWaveFormat('HEARTBEAT');
         setFlashlightActive(true);
         setActivePhoneTab('FLASHLIGHT');
-        addLine('[ACTUATOR] CameraManager: Biomimetic HEARTBEAT dual systolic pulse wave active.', 'pass');
+        addLine('[ACTUATOR] UnifiedHardwareController: Biomimetic HEARTBEAT pulse wave active.', 'pass');
         return;
       }
       if (lower.includes('dual wave') || lower.includes('alternating')) {
         setFlashlightWaveFormat('DUAL_ALTERNATING');
         setFlashlightActive(true);
         setActivePhoneTab('FLASHLIGHT');
-        addLine('[ACTUATOR] CameraManager: DUAL_ALTERNATING waving back & forth between rear and front emitters.', 'pass');
+        addLine('[ACTUATOR] UnifiedHardwareController: DUAL_ALTERNATING waving back & forth.', 'pass');
         return;
       }
       if (lower.includes('flash off') || lower.includes('torch off')) {
-        setFlashlightActive(false);
-        addLine('[ACTUATOR] CameraManager: Flashlight disabled.', 'output');
+        unifiedHardwareController.executeHardwareAction({
+          actuatorId: 'camera_torch_back',
+          actionType: 'TORCH_OFF'
+        }).then(res => {
+          setFlashlightActive(false);
+          addLine(`[ACTUATOR] Camera Torch (${res.status}): ${res.message} [Physical Verified: ${res.verifiedPhysicalState}]`, 'pass');
+        });
         return;
       }
     }
@@ -1623,11 +1670,11 @@ export function App() {
       setTimeout(async () => {
         const p = dynamicHostProbe || await probeLiveDeviceHardware();
         addLine(`  ├─ Live Host:      ${p.deviceName} (${p.platform} / ${p.osVersion})`, 'pass');
-        addLine(`  ├─ Physical RAM:   ${p.totalRamMb} MB (${(p.totalRamMb / 1024).toFixed(1)} GB)`, 'output');
-        addLine(`  ├─ OS Overhead:    ${p.osOverheadMb} MB | Active App Buffer: ${p.activeAppBufferMb} MB`, 'output');
-        addLine(`  ├─ Safe SLM Cap:   ${p.calculatedSafeCeilingMb} MB (Math: [Total - OS - Buffer] * 0.25)`, 'highlight');
-        addLine(`  ├─ CPU Cores:      ${p.cpuCores} hardware threads`, 'output');
-        addLine(`  ├─ GPU Renderer:   ${p.gpuRenderer}`, 'output');
+        addLine(`  ├─ Physical RAM:   ${p.totalRamMb !== null ? `${p.totalRamMb} MB (${(p.totalRamMb / 1024).toFixed(1)} GB) [MEASURED]` : 'UNAVAILABLE (Sandbox Restricted)'}`, 'output');
+        addLine(`  ├─ OS Overhead:    ${p.osOverheadMb !== null ? `${p.osOverheadMb} MB` : 'N/A'} | Active App Buffer: ${p.activeAppBufferMb !== null ? `${p.activeAppBufferMb} MB` : 'N/A'}`, 'output');
+        addLine(`  ├─ Safe SLM Cap:   ${p.calculatedSafeCeilingMb !== null ? `${p.calculatedSafeCeilingMb} MB` : '380 MB (Conservative Sandbox Policy)'}`, 'highlight');
+        addLine(`  ├─ CPU Cores:      ${p.cpuCores !== null ? `${p.cpuCores} hardware threads [MEASURED]` : 'UNAVAILABLE'}`, 'output');
+        addLine(`  ├─ GPU Renderer:   ${p.gpuRenderer || 'UNAVAILABLE'}`, 'output');
         addLine(`  ├─ Battery State:  ${p.batteryPercent ?? 'N/A'}% (${p.isCharging ? 'Charging' : 'Discharging'})`, 'output');
         addLine(`  ├─ Camera Torch:   ${physicalTorchSupported ? 'PHYSICAL HARDWARE TORCH SUPPORTED' : 'Simulated HAL Camera API'}`, physicalTorchSupported ? 'pass' : 'output');
         addLine(`  ├─ Auto-Selection: ${p.recommendedModelName} (${p.recommendedTier})`, 'pass');
@@ -1644,16 +1691,16 @@ export function App() {
       setTimeout(async () => {
         const p = dynamicHostProbe || await probeLiveDeviceHardware();
         setActiveHardwareTier(p.recommendedTier);
-        if (p.totalRamMb <= 4096) {
+        if (p.totalRamMb !== null && p.totalRamMb <= 4096) {
           setActiveDevicePreset(DEVICE_PRESETS[0]);
-        } else if (p.totalRamMb <= 8192) {
+        } else if (p.totalRamMb !== null && p.totalRamMb <= 8192) {
           setActiveDevicePreset(DEVICE_PRESETS[1]);
         } else {
-          setActiveDevicePreset(DEVICE_PRESETS[2]);
+          setActiveDevicePreset(DEVICE_PRESETS[0]);
         }
         addLine(`  ├─ Applied Tier:    ${p.recommendedTier}`, 'pass');
         addLine(`  ├─ Applied Model:   ${p.recommendedModelName}`, 'pass');
-        addLine(`  └─ Memory Governor: Ceiling set to ${p.calculatedSafeCeilingMb}MB resident RAM`, 'highlight');
+        addLine(`  └─ Memory Governor: Ceiling set to ${p.calculatedSafeCeilingMb !== null ? `${p.calculatedSafeCeilingMb}MB` : '380MB (Conservative)'} resident RAM`, 'highlight');
         addLine('[PASS] Hardware profile dynamically configured to optimal host parameters.', 'pass');
         setIsCmdRunning(false);
       }, 250);
@@ -1665,16 +1712,16 @@ export function App() {
       setIsCmdRunning(true);
       addLine(`[COMPOSER] Autonomous Agent synthesizing bespoke light choreography for: "${concept}"...`, 'info');
       setTimeout(() => {
-        const isDark = ambientLightLux < 30;
-        const targetCam = concept.includes('front') ? '1' : concept.includes('dual') || concept.includes('sos') ? 'DUAL' : isDark ? '1' : '0';
+        const isDark = ambientLightLux !== null ? ambientLightLux < 30 : false;
+        const targetCam = concept.includes('front') ? '1' : concept.includes('dual') || concept.includes('sos') ? 'DUAL' : '0';
         const pulses = [
           { cam: targetCam, on: 90, off: 80, rep: 2 },
           { cam: 'DUAL', on: 160, off: 120, rep: 1 },
           { cam: targetCam, on: 100, off: 200, rep: 1 }
         ];
         addLine(`  ├─ Emitter Sequence: Target=${targetCam === '1' ? 'Front Dual-LED' : targetCam === 'DUAL' ? 'Dual 360° Concurrent' : 'Rear Quad-LED'} (${pulses.length} pulse blocks)`, 'output');
-        addLine(`  ├─ Ambient Calibration: ${ambientLightLux} lux | Power Budget: 195mA (Safe &lt; 450mA ceiling)`, 'output');
-        addLine(`  ├─ Thermal Guard: Helio P23 SoC at ${socTemperatureC.toFixed(1)}°C (No throttling)`, 'output');
+        addLine(`  ├─ Ambient Calibration: ${ambientLightLux !== null ? `${ambientLightLux} lux` : 'Sensor N/A (Standard Safe Profile)'} | Power Budget: 195mA (Safe < 450mA ceiling)`, 'output');
+        addLine(`  ├─ Thermal Guard: ${socTemperatureC !== null ? `SoC at ${socTemperatureC.toFixed(1)}°C` : 'SoC Telemetry Sandbox-Restricted (Safe Ceiling Enforced)'}`, 'output');
 
         let delayAcc = 0;
         pulses.forEach(p => {
@@ -1972,8 +2019,8 @@ export function App() {
     if (lower === 'status') {
       addLine(`J.A.R.V.I.S. Status: ${agentConsciousness.operationalStatus} | Pulse: ${agentConsciousness.cognitivePulse}`, 'info');
       addLine(`Foreground App: ${agentConsciousness.activeAppLabel} (${agentConsciousness.activeForegroundPackage})`, 'output');
-      addLine(`Helio P23 SoC: ${socTemperatureC.toFixed(1)}°C | Ambient Lux: ${ambientLightLux} lux`, 'output');
-      addLine(`Memory Allocation: 42.1 MB / 48.0 MB idle ceiling (Helio P23 CorePilot safe)`, 'output');
+      addLine(`SoC Temp: ${socTemperatureC !== null ? `${socTemperatureC.toFixed(1)}°C [MEASURED]` : 'UNAVAILABLE (Web Sandbox)'} | Ambient Lux: ${ambientLightLux !== null ? `${ambientLightLux} lux [MEASURED]` : 'UNAVAILABLE (Web Sandbox)'}`, 'output');
+      addLine(`Memory Allocation: 42.1 MB / 48.0 MB idle ceiling`, 'output');
       addLine(`Active Actuators: Flashlight=${flashlightActive ? 'ON' : 'OFF'} (${flashlightMode}) | Kill Switch=${killSwitchActive ? 'TRIGGERED' : 'ARMED'}`, 'warn');
       return;
     }
@@ -2575,11 +2622,23 @@ export function App() {
   const [nightShieldActive, setNightShieldActive] = useState(false);
   const [wifiEnabled, setWifiEnabled] = useState(true);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
-  const [batteryLevel, setBatteryLevel] = useState(84);
+  const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
 
-  // Probe real host hardware and camera torch actuators on mount
+  // Probe real host hardware and camera torch actuators on mount via UnifiedHardwareController
   useEffect(() => {
     let unmounted = false;
+    let sensorSubId: string | null = null;
+
+    unifiedHardwareController.discoverCapabilities().then(reg => {
+      if (unmounted) return;
+      if (reg.battery.level.provenance === 'MEASURED' && reg.battery.level.value !== null) {
+        setBatteryLevel(Math.round(reg.battery.level.value));
+      }
+      sensorSubId = unifiedHardwareController.subscribeToSensor('motion', { samplingPeriodMs: 500 }, (_reading) => {
+        // live sensor updates if physical accelerometer is active
+      });
+    });
+
     probeLiveDeviceHardware().then(data => {
       if (unmounted) return;
       setDynamicHostProbe(data);
@@ -2588,7 +2647,7 @@ export function App() {
       }
       setExecutionLogs(prev => [
         ...prev,
-        `[${new Date().toLocaleTimeString()}] DYNAMIC HARDWARE PROBE: Detected ${data.deviceName} (${data.osVersion}), ${data.totalRamMb}MB RAM, ${data.cpuCores} cores. Safe SLM Ceiling: ${data.calculatedSafeCeilingMb}MB. Recommended: ${data.recommendedModelName}.`
+        `[${new Date().toLocaleTimeString()}] DYNAMIC HARDWARE PROBE: Detected ${data.deviceName} (${data.osVersion}), ${data.totalRamMb !== null ? `${data.totalRamMb}MB RAM` : 'RAM Unknown'}, ${data.cpuCores !== null ? `${data.cpuCores} cores` : 'Cores Unknown'}. Safe SLM Ceiling: ${data.calculatedSafeCeilingMb}MB. Recommended: ${data.recommendedModelName}.`
       ]);
     });
 
@@ -2603,6 +2662,9 @@ export function App() {
 
     return () => {
       unmounted = true;
+      if (sensorSubId) {
+        unifiedHardwareController.unsubscribeFromSensor(sensorSubId);
+      }
       webTorchActuator.stopWave();
       webTorchActuator.releaseHardwareTorch();
     };
@@ -4208,9 +4270,15 @@ export function App() {
             {/* Emergency Kill Switch */}
             <button
               onClick={() => {
-                setKillSwitchActive(!killSwitchActive);
-                if (!killSwitchActive) {
+                const nextKillState = !killSwitchActive;
+                setKillSwitchActive(nextKillState);
+                if (nextKillState) {
                   setFlashlightActive(false);
+                  const stopReport = unifiedHardwareController.emergencyStop('User activated UI Kill Switch');
+                  setExecutionLogs(l => [
+                    ...l,
+                    `[${new Date().toLocaleTimeString()}] EMERGENCY STOP REPORT: Actuators silenced=${stopReport.actuatorsSilenced?.length || 0}, Operations cancelled=${stopReport.operationsCancelled?.length || 0}`
+                  ]);
                   setAgentConsciousness(prev => ({
                     ...prev,
                     operationalStatus: 'HALTED',
@@ -4343,7 +4411,7 @@ export function App() {
                   )}
                 </div>
                 <div className="text-[10px] text-slate-300 truncate mt-0.5">
-                  GPU: {dynamicHostProbe.gpuRenderer.slice(0, 32)} &bull; Recommended Model: <strong className="text-emerald-400">{dynamicHostProbe.recommendedModelName}</strong> ({dynamicHostProbe.recommendedTier})
+                  GPU: {dynamicHostProbe.gpuRenderer ? dynamicHostProbe.gpuRenderer.slice(0, 32) : 'Unavailable'} &bull; Recommended Model: <strong className="text-emerald-400">{dynamicHostProbe.recommendedModelName}</strong> ({dynamicHostProbe.recommendedTier})
                 </div>
               </div>
             </div>
@@ -4352,12 +4420,12 @@ export function App() {
               <button
                 onClick={() => {
                   setActiveHardwareTier(dynamicHostProbe.recommendedTier);
-                  if (dynamicHostProbe.totalRamMb <= 4096) {
+                  if (dynamicHostProbe.totalRamMb !== null && dynamicHostProbe.totalRamMb <= 4096) {
                     setActiveDevicePreset(DEVICE_PRESETS[0]);
-                  } else if (dynamicHostProbe.totalRamMb <= 8192) {
+                  } else if (dynamicHostProbe.totalRamMb !== null && dynamicHostProbe.totalRamMb <= 8192) {
                     setActiveDevicePreset(DEVICE_PRESETS[1]);
                   } else {
-                    setActiveDevicePreset(DEVICE_PRESETS[2]);
+                    setActiveDevicePreset(DEVICE_PRESETS[0]);
                   }
                   triggerHapticFeedback('CONFIRM');
                   playWebAudioChime();
@@ -4504,7 +4572,7 @@ export function App() {
                 <span className="text-slate-500">POWER:</span> <span className="text-emerald-400 font-bold">0.8W</span>
               </div>
               <div className="px-2 py-1 bg-black border border-slate-800 rounded text-slate-300 hidden sm:block">
-                <span className="text-slate-500">BATTERY:</span> <span className="text-emerald-400 font-bold">{batteryLevel}%</span>
+                <span className="text-slate-500">BATTERY:</span> <span className="text-emerald-400 font-bold">{batteryLevel !== null ? `${batteryLevel}%` : 'N/A'}</span>
               </div>
             </div>
           </div>
@@ -5548,12 +5616,11 @@ export function App() {
                                 `[${new Date().toLocaleTimeString()}] PHYSICAL TORCH: Real device camera torch engaged via Web MediaStreamTrack.`
                               ]);
                             } else {
+                              setPhysicalTorchActive(false);
                               setExecutionLogs(l => [
                                 ...l,
-                                `[${new Date().toLocaleTimeString()}] PHYSICAL TORCH: Device camera torch constraint not exposed in current browser; running simulated HAL torch.`
+                                `[${new Date().toLocaleTimeString()}] PHYSICAL TORCH: Device camera torch constraint not supported or permission denied on host; physical emitter remains OFF.`
                               ]);
-                              setPhysicalTorchActive(true);
-                              setFlashlightActive(true);
                             }
                           } else {
                             webTorchActuator.setHardwareTorch(false);
@@ -5747,7 +5814,7 @@ export function App() {
                       <Battery className="w-3.5 h-3.5 text-emerald-400" />
                       <div>
                         <div className="text-[10px] text-white">Thermal</div>
-                        <div className="text-[9px] text-emerald-400 font-bold">31.4&deg;C (Good)</div>
+                        <div className="text-[9px] text-emerald-400 font-bold">{socTemperatureC !== null ? `${socTemperatureC.toFixed(1)}°C` : 'Restricted (Sandbox)'}</div>
                       </div>
                     </div>
                   </div>
@@ -6194,9 +6261,13 @@ export function App() {
                               if (next) {
                                 const ok = await webTorchActuator.acquireCameraTorch();
                                 setPhysicalTorchSupported(ok);
-                                webTorchActuator.setHardwareTorch(true);
-                                setPhysicalTorchActive(true);
-                                setFlashlightActive(true);
+                                if (ok) {
+                                  webTorchActuator.setHardwareTorch(true);
+                                  setPhysicalTorchActive(true);
+                                  setFlashlightActive(true);
+                                } else {
+                                  setPhysicalTorchActive(false);
+                                }
                               } else {
                                 webTorchActuator.setHardwareTorch(false);
                                 setPhysicalTorchActive(false);

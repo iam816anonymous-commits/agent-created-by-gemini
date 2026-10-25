@@ -1,94 +1,52 @@
 /**
  * Web Torch Actuator & Multimodal Waving Engine.
  *
- * Integrates:
- * 1. Physical Hardware Torch via Web Camera API (MediaStreamTrack torch constraint) on supported mobile browsers.
+ * Integrated with the Authoritative UnifiedHardwareController.
+ * Real Hardware Operations:
+ * 1. Physical Hardware Torch via Web Camera API (MediaStreamTrack torch constraint).
  * 2. Multi-format waving optical patterns: SINE_WAVE, DUAL_ALTERNATING, STROBE_BURST, SOS_BEACON, HEARTBEAT.
- * 3. Synced multimodal haptics (navigator.vibrate) and harmonic audio pitch modulation.
+ * 3. Synced multimodal haptics and procedural harmonic audio.
+ * 4. Transparent distinction between physical hardware execution and visual animation simulation.
  */
 
-export type FlashlightWaveFormat =
-  | 'CONSTANT'
-  | 'SINE_WAVE'
-  | 'STROBE_BURST'
-  | 'DUAL_ALTERNATING'
-  | 'SOS_BEACON'
-  | 'HEARTBEAT';
+import { unifiedHardwareController } from '../hardware/UnifiedHardwareController';
+import { OpticalWaveFormat } from '../hardware/types';
+
+export type FlashlightWaveFormat = OpticalWaveFormat;
 
 class WebTorchActuator {
-  private mediaStream: MediaStream | null = null;
-  private videoTrack: MediaStreamTrack | null = null;
-  private isTorchSupported = false;
   private waveAnimationId: number | null = null;
   private audioContext: AudioContext | null = null;
+  private currentIntensity = 0;
 
   async init(): Promise<boolean> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      return false;
-    }
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const hasVideo = devices.some(d => d.kind === 'videoinput');
-      return hasVideo;
-    } catch (_e) {
-      return false;
-    }
+    const reg = await unifiedHardwareController.discoverCapabilities();
+    const torchActuator = reg.actuators.find(a => a.type === 'TORCH');
+    return !!torchActuator && torchActuator.provenance !== 'UNSUPPORTED';
   }
 
-  async acquireCameraTorch(): Promise<boolean> {
-    if (this.videoTrack) return this.isTorchSupported;
-    try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }
-      });
-      this.videoTrack = this.mediaStream.getVideoTracks()[0] || null;
-      if (this.videoTrack) {
-        const capabilities: any = this.videoTrack.getCapabilities?.() || {};
-        this.isTorchSupported = !!capabilities.torch;
-        return this.isTorchSupported;
-      }
-    } catch (_e) {
-      this.isTorchSupported = false;
-    }
-    return false;
+  async acquireCameraTorch(cameraId?: string): Promise<boolean> {
+    const res = await unifiedHardwareController.executeHardwareAction('TORCH_ON', {
+      enabled: false, // probe check without turning on
+      cameraId
+    });
+    // Check observed actuator
+    const state = unifiedHardwareController.getObservedHardwareState('actuator-torch-primary');
+    return state.status !== 'UNSUPPORTED';
   }
 
   async setHardwareTorch(on: boolean): Promise<boolean> {
-    if (!this.videoTrack) {
-      await this.acquireCameraTorch();
-    }
-    if (this.videoTrack && this.isTorchSupported) {
-      try {
-        await (this.videoTrack as any).applyConstraints({
-          advanced: [{ torch: on }]
-        });
-        return true;
-      } catch (_e) {
-        return false;
-      }
-    }
-    return false;
+    const res = await unifiedHardwareController.executeHardwareAction(on ? 'TORCH_ON' : 'TORCH_OFF', {
+      enabled: on
+    });
+    return res.status === 'COMMAND_ACCEPTED_UNVERIFIED' || res.status === 'SUCCESS_VERIFIED';
   }
 
   releaseHardwareTorch() {
     this.stopWave();
-    if (this.videoTrack) {
-      try {
-        (this.videoTrack as any).applyConstraints({ advanced: [{ torch: false }] });
-      } catch (_e) {}
-      this.videoTrack.stop();
-      this.videoTrack = null;
-    }
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(t => t.stop());
-      this.mediaStream = null;
-    }
+    unifiedHardwareController.executeHardwareAction('TORCH_OFF', { enabled: false });
   }
 
-  /**
-   * Starts multimodal waving loop, invoking onFrame with the current optical intensity (0.0 to 1.0)
-   * and emitter target ('BACK' | 'FRONT' | 'DUAL').
-   */
   startWave(
     format: FlashlightWaveFormat,
     speedMultiplier: number = 1.0,
@@ -96,6 +54,13 @@ class WebTorchActuator {
   ) {
     this.stopWave();
     const startTime = performance.now();
+
+    // Notify UnifiedHardwareController
+    unifiedHardwareController.executeHardwareAction('TORCH_WAVE', {
+      enabled: true,
+      waveFormat: format,
+      speedMultiplier
+    });
 
     const loop = (now: number) => {
       const elapsed = (now - startTime) * speedMultiplier;
@@ -109,15 +74,13 @@ class WebTorchActuator {
           break;
 
         case 'SINE_WAVE': {
-          // Smooth fluid sinusoidal optical wave
-          const phase = (elapsed % 1800) / 1800; // 1.8s per wave cycle
+          const phase = (elapsed % 1800) / 1800;
           intensity = 0.15 + 0.85 * (0.5 + 0.5 * Math.sin(phase * 2 * Math.PI - Math.PI / 2));
           emitter = phase > 0.5 ? 'DUAL' : 'BACK';
           break;
         }
 
         case 'STROBE_BURST': {
-          // Rapid high-cadence strobe pulse wave
           const cycle = Math.floor(elapsed / 80) % 2;
           intensity = cycle === 0 ? 1.0 : 0.05;
           emitter = 'DUAL';
@@ -125,8 +88,7 @@ class WebTorchActuator {
         }
 
         case 'DUAL_ALTERNATING': {
-          // Waving back and forth between rear and front emitters
-          const pos = (elapsed % 2400) / 2400; // 2.4s cycle
+          const pos = (elapsed % 2400) / 2400;
           if (pos < 0.35) {
             emitter = 'BACK';
             intensity = 0.2 + 0.8 * Math.sin((pos / 0.35) * Math.PI);
@@ -144,7 +106,6 @@ class WebTorchActuator {
         }
 
         case 'SOS_BEACON': {
-          // Morse code: 3 short, 3 long, 3 short (... --- ...)
           const t = Math.floor(elapsed / 150) % 24;
           const isDit = t === 0 || t === 2 || t === 4;
           const isDah = t === 8 || t === 9 || t === 11 || t === 12 || t === 14 || t === 15;
@@ -155,7 +116,6 @@ class WebTorchActuator {
         }
 
         case 'HEARTBEAT': {
-          // Double systolic-diastolic cardiac pulse wave
           const beatPos = (elapsed % 1000) / 1000;
           if (beatPos < 0.15) {
             intensity = Math.sin((beatPos / 0.15) * Math.PI);
@@ -169,12 +129,8 @@ class WebTorchActuator {
         }
       }
 
+      this.currentIntensity = intensity;
       onFrame(intensity, emitter);
-
-      // Periodically trigger physical hardware torch state if supported
-      if (this.isTorchSupported && format === 'STROBE_BURST') {
-        this.setHardwareTorch(intensity > 0.5);
-      }
 
       this.waveAnimationId = requestAnimationFrame(loop);
     };
@@ -187,82 +143,48 @@ class WebTorchActuator {
       cancelAnimationFrame(this.waveAnimationId);
       this.waveAnimationId = null;
     }
+    this.currentIntensity = 0;
   }
 
-  /**
-   * Dispatches multimodal haptic wave pattern matching the optical wave.
-   */
+  getCurrentIntensity(): number {
+    return this.currentIntensity;
+  }
+
   triggerHapticWave(format: FlashlightWaveFormat) {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        switch (format) {
-          case 'SINE_WAVE':
-            navigator.vibrate([40, 60, 80, 60, 120]);
-            break;
-          case 'STROBE_BURST':
-            navigator.vibrate([20, 20, 20, 20, 20, 20, 40]);
-            break;
-          case 'DUAL_ALTERNATING':
-            navigator.vibrate([60, 80, 140, 80, 60]);
-            break;
-          case 'SOS_BEACON':
-            navigator.vibrate([100, 100, 100, 100, 100, 200, 300, 100, 300, 100, 300, 200, 100, 100, 100]);
-            break;
-          case 'HEARTBEAT':
-            navigator.vibrate([80, 80, 120]);
-            break;
-          default:
-            navigator.vibrate(50);
-            break;
-        }
-      } catch (_e) {}
+    let pattern: number | number[] = 50;
+    switch (format) {
+      case 'SINE_WAVE':
+        pattern = [40, 60, 80, 60, 120];
+        break;
+      case 'STROBE_BURST':
+        pattern = [20, 20, 20, 20, 20, 20, 40];
+        break;
+      case 'DUAL_ALTERNATING':
+        pattern = [60, 80, 140, 80, 60];
+        break;
+      case 'SOS_BEACON':
+        pattern = [100, 100, 100, 100, 100, 200, 300, 100, 300, 100, 300, 200, 100, 100, 100];
+        break;
+      case 'HEARTBEAT':
+        pattern = [80, 80, 120];
+        break;
+      default:
+        pattern = 40;
+        break;
     }
+    unifiedHardwareController.executeHardwareAction('HAPTIC_PULSE', { pattern });
   }
 
-  /**
-   * Plays harmonic audio pitch wave synced to the light oscillation.
-   */
   playWaveChime(format: FlashlightWaveFormat) {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      if (!this.audioContext || this.audioContext.state === 'closed') {
-        this.audioContext = new AudioCtx();
-      }
-      if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume();
-      }
-      const osc = this.audioContext.createOscillator();
-      const gain = this.audioContext.createGain();
-      osc.connect(gain);
-      gain.connect(this.audioContext.destination);
+    let freq = 587.33;
+    if (format === 'SINE_WAVE') freq = 660;
+    else if (format === 'HEARTBEAT') freq = 110;
+    else if (format === 'STROBE_BURST') freq = 880;
 
-      const now = this.audioContext.currentTime;
-      osc.type = 'sine';
-
-      if (format === 'SINE_WAVE') {
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.3);
-        osc.frequency.exponentialRampToValueAtTime(440, now + 0.6);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
-      } else if (format === 'HEARTBEAT') {
-        osc.frequency.setValueAtTime(120, now);
-        osc.frequency.exponentialRampToValueAtTime(80, now + 0.15);
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(587.33, now); // D5
-        gain.gain.setValueAtTime(0.06, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-      }
-    } catch (_e) {}
+    unifiedHardwareController.executeHardwareAction('AUDIO_TONE', {
+      frequency: freq,
+      durationMs: 300
+    });
   }
 }
 

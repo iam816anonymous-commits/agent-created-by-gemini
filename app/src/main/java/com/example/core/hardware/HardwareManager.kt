@@ -31,17 +31,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class LiveSensorTelemetry(
-    val accelerometerX: Float = 0f,
-    val accelerometerY: Float = 9.8f,
-    val accelerometerZ: Float = 0f,
-    val ambientLightLux: Float = 120f,
-    val proximityDistanceCm: Float = 5.0f,
-    val isProximityNear: Boolean = false,
+    val accelerometerX: Float? = null,
+    val accelerometerY: Float? = null,
+    val accelerometerZ: Float? = null,
+    val ambientLightLux: Float? = null,
+    val proximityDistanceCm: Float? = null,
+    val isProximityNear: Boolean? = null,
     val hasAccelerometer: Boolean = false,
     val hasLightSensor: Boolean = false,
     val hasProximitySensor: Boolean = false,
     val hasBarometer: Boolean = false,
-    val pressureHpa: Float = 1013.25f,
+    val pressureHpa: Float? = null,
     val lastUpdateMs: Long = System.currentTimeMillis()
 )
 
@@ -149,10 +149,6 @@ class HardwareManager(private val context: Context) : SensorEventListener {
                         }
                     }
                 }
-                // Fallback if rear not assigned
-                if (backCameraIdWithFlash == null && manager.cameraIdList.isNotEmpty()) {
-                    backCameraIdWithFlash = manager.cameraIdList.firstOrNull()
-                }
             }
         } catch (_: Exception) {}
     }
@@ -242,8 +238,7 @@ class HardwareManager(private val context: Context) : SensorEventListener {
                 Intent(Settings.ACTION_WIFI_SETTINGS).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             }
             context.startActivity(panelIntent)
-            _isWifiEnabled.value = enabled // optimistic update
-            ActuatorResult(true, "Wi-Fi control panel launched (requested state: ${if (enabled) "ON" else "OFF"})")
+            ActuatorResult(true, "Wi-Fi control panel launched (requested state: ${if (enabled) "ON" else "OFF"}); awaiting system broadcast")
         } catch (e: Exception) {
             openSystemSetting(Settings.ACTION_WIFI_SETTINGS)
             ActuatorResult(true, "Launched Wi-Fi system settings: ${e.message}")
@@ -281,8 +276,7 @@ class HardwareManager(private val context: Context) : SensorEventListener {
                 }
                 try {
                     context.startActivity(reqIntent)
-                    _isBluetoothEnabled.value = true
-                    ActuatorResult(true, "Bluetooth enable authorization prompt triggered")
+                    ActuatorResult(true, "Bluetooth enable authorization prompt triggered; awaiting user authorization")
                 } catch (_: Exception) {
                     openSystemSetting(Settings.ACTION_BLUETOOTH_SETTINGS)
                 }
@@ -347,32 +341,49 @@ class HardwareManager(private val context: Context) : SensorEventListener {
                 findCamerasWithFlash()
             }
 
+            var actuated = false
             when (target) {
                 com.example.core.model.FlashlightTarget.BACK -> {
-                    backCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
-                    _isBackTorchEnabled.value = enabled
-                    _isTorchEnabled.value = enabled
+                    backCameraIdWithFlash?.let { id ->
+                        cameraManager?.setTorchMode(id, enabled)
+                        _isBackTorchEnabled.value = enabled
+                        actuated = true
+                    }
                 }
                 com.example.core.model.FlashlightTarget.FRONT -> {
-                    frontCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
-                    _isFrontTorchEnabled.value = enabled
-                    _isTorchEnabled.value = enabled
+                    frontCameraIdWithFlash?.let { id ->
+                        cameraManager?.setTorchMode(id, enabled)
+                        _isFrontTorchEnabled.value = enabled
+                        actuated = true
+                    }
                 }
                 com.example.core.model.FlashlightTarget.DUAL -> {
-                    backCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
-                    frontCameraIdWithFlash?.let { id -> cameraManager?.setTorchMode(id, enabled) }
-                    _isBackTorchEnabled.value = enabled
-                    _isFrontTorchEnabled.value = enabled
-                    _isTorchEnabled.value = enabled
+                    backCameraIdWithFlash?.let { id ->
+                        cameraManager?.setTorchMode(id, enabled)
+                        _isBackTorchEnabled.value = enabled
+                        actuated = true
+                    }
+                    frontCameraIdWithFlash?.let { id ->
+                        cameraManager?.setTorchMode(id, enabled)
+                        _isFrontTorchEnabled.value = enabled
+                        actuated = true
+                    }
                 }
             }
 
-            ActuatorResult(
-                true,
-                "${target.label} ${if (enabled) "ON" else "OFF"}"
-            )
+            if (actuated) {
+                _isTorchEnabled.value = _isBackTorchEnabled.value || _isFrontTorchEnabled.value
+                ActuatorResult(
+                    true,
+                    "${target.label} ${if (enabled) "ON" else "OFF"}"
+                )
+            } else {
+                ActuatorResult(
+                    false,
+                    "No hardware flash emitter identified for ${target.label}"
+                )
+            }
         } catch (e: Exception) {
-            _isTorchEnabled.value = enabled
             ActuatorResult(false, "Torch actuation error: ${e.message}")
         }
     }

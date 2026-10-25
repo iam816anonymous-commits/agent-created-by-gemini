@@ -360,13 +360,13 @@ export function DeviceModelProfiler({
   const livePreset: DeviceHardwareProfile | null = dynamicProbe ? {
     id: 'live_probed_device',
     name: `[LIVE PROBE] ${dynamicProbe.deviceName}`,
-    socModel: dynamicProbe.gpuRenderer,
-    cpuArch: `${dynamicProbe.cpuCores}-core (${dynamicProbe.platform})`,
-    coreTopology: `${dynamicProbe.cpuCores} active execution threads`,
+    socModel: dynamicProbe.gpuRenderer || 'Host Graphics',
+    cpuArch: dynamicProbe.cpuCores ? `${dynamicProbe.cpuCores}-core (${dynamicProbe.platform})` : `Host (${dynamicProbe.platform})`,
+    coreTopology: dynamicProbe.cpuCores ? `${dynamicProbe.cpuCores} active execution threads` : 'Thread count unexposed',
     simdSupport: ['NEON', 'WebGL2', 'SIMD', 'WASM'],
-    totalRamMb: dynamicProbe.totalRamMb,
-    osOverheadMb: dynamicProbe.osOverheadMb,
-    activeAppBufferMb: dynamicProbe.activeAppBufferMb,
+    totalRamMb: dynamicProbe.totalRamMb || 4096,
+    osOverheadMb: dynamicProbe.osOverheadMb || 1850,
+    activeAppBufferMb: dynamicProbe.activeAppBufferMb || 720,
     androidSdk: dynamicProbe.isMobile ? 27 : 34,
     androidVersion: `${dynamicProbe.osName} ${dynamicProbe.osVersion}`,
     pageSizeBytes: dynamicProbe.recommendedPageSize
@@ -654,23 +654,46 @@ export function DeviceModelProfiler({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
             <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
-              <div className="text-slate-500">PROBED RAM:</div>
-              <div className="text-cyan-300 font-bold">{dynamicProbe.totalRamMb} MB</div>
-              <div className="text-[9px] text-emerald-400">Safe Ceiling: {dynamicProbe.calculatedSafeCeilingMb} MB</div>
+              <div className="flex items-center justify-between text-slate-500">
+                <span>HOST RAM:</span>
+                <span className={`text-[8px] px-1 rounded ${dynamicProbe.ramProvenance === 'MEASURED' ? 'bg-cyan-950 text-cyan-300' : 'bg-slate-900 text-slate-400'}`}>
+                  {dynamicProbe.ramProvenance}
+                </span>
+              </div>
+              <div className="text-cyan-300 font-bold">
+                {dynamicProbe.totalRamMb !== null ? `${dynamicProbe.totalRamMb} MB` : 'Unavailable (Sandboxed)'}
+              </div>
+              <div className="text-[9px] text-emerald-400">
+                Safe Cap: {dynamicProbe.calculatedSafeCeilingMb !== null ? `${dynamicProbe.calculatedSafeCeilingMb} MB` : 'Conservative Cap'}
+              </div>
             </div>
 
             <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
-              <div className="text-slate-500">CPU TOPOLOGY:</div>
-              <div className="text-white font-bold">{dynamicProbe.cpuCores} Threads</div>
+              <div className="flex items-center justify-between text-slate-500">
+                <span>CPU CORES:</span>
+                <span className={`text-[8px] px-1 rounded ${dynamicProbe.cpuProvenance === 'MEASURED' ? 'bg-cyan-950 text-cyan-300' : 'bg-slate-900 text-slate-400'}`}>
+                  {dynamicProbe.cpuProvenance}
+                </span>
+              </div>
+              <div className="text-white font-bold">
+                {dynamicProbe.cpuCores !== null ? `${dynamicProbe.cpuCores} Threads` : 'Unexposed'}
+              </div>
               <div className="text-[9px] text-slate-400 truncate">{dynamicProbe.osName} {dynamicProbe.osVersion}</div>
             </div>
 
             <div className="p-2 bg-black/80 rounded-lg border border-slate-900">
-              <div className="text-slate-500">GPU RENDERER:</div>
-              <div className="text-amber-300 font-bold truncate" title={dynamicProbe.gpuRenderer}>
-                {dynamicProbe.gpuRenderer.split(' (')[0]}
+              <div className="flex items-center justify-between text-slate-500">
+                <span>GPU RENDERER:</span>
+                <span className={`text-[8px] px-1 rounded ${dynamicProbe.gpuProvenance === 'MEASURED' ? 'bg-cyan-950 text-cyan-300' : 'bg-slate-900 text-slate-400'}`}>
+                  {dynamicProbe.gpuProvenance}
+                </span>
               </div>
-              <div className="text-[9px] text-slate-400">WebGL Acceleration</div>
+              <div className="text-amber-300 font-bold truncate" title={dynamicProbe.gpuRenderer || 'Unavailable'}>
+                {dynamicProbe.gpuRenderer ? dynamicProbe.gpuRenderer.split(' (')[0] : 'Unavailable'}
+              </div>
+              <div className="text-[9px] text-slate-400">
+                {dynamicProbe.gpuRenderer ? 'WebGL Acceleration' : 'Software / Protected'}
+              </div>
             </div>
 
             <div className="p-2 bg-black/80 rounded-lg border border-slate-900">

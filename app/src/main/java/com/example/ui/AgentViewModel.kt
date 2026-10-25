@@ -133,8 +133,8 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     private val _deviceCapabilities = MutableStateFlow(capabilityDetector.detectCapabilities())
     val deviceCapabilities: StateFlow<DeviceCapabilities> = _deviceCapabilities.asStateFlow()
 
-    private val _storageMetrics = MutableStateFlow(capabilityDetector.getStorageMetrics())
-    val storageMetrics: StateFlow<Pair<Long, Long>> = _storageMetrics.asStateFlow()
+    private val _storageMetrics = MutableStateFlow<Pair<Long, Long>?>(capabilityDetector.getStorageMetrics())
+    val storageMetrics: StateFlow<Pair<Long, Long>?> = _storageMetrics.asStateFlow()
 
     val allExecutions: StateFlow<List<TaskExecutionEntity>> = repository.allExecutions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
