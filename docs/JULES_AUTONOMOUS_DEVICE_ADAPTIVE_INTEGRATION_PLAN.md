@@ -258,12 +258,13 @@ For each candidate, record: repository URL, commit SHA, files/symbols examined, 
 
 ## 8. Phased delivery and acceptance gates
 
-### Phase 0 — Baseline, governance, and inventory
-- Reconcile governance documents and phase boundaries.
-- Record branch/HEAD/worktree and baseline build, unit tests, instrumentation tests, lint, and CI status. If a command cannot run, state why.
-- Inventory modules, routes, controls, state stores, device probes, model/runtime code, action adapters, permissions, persistence, and tests.
-- Create/update `docs/APP_SCREEN_CONNECTION_MATRIX.md`, `docs/REFERENCE_REPOSITORY_COMPARISON.md`, and `docs/AUTONOMY_IMPLEMENTATION_STATUS.md`.
-- Gate: baseline and unresolved risks are documented; no product code change is made until scope and high-risk contracts are understood.
+### Phase 0 — Targeted integration audit (not a greenfield restart)
+- Treat the existing source and prior audit documents as real implementation work. Do not recreate architecture, screens, telemetry types, controllers, test infrastructure, or roadmap documents that already exist.
+- Reconcile governance and record the active branch/HEAD plus its relationship to current `main`. The roadmap branch has previously diverged from `main`; inspect the exact merge-base and diff before editing. Do not blindly merge, reset, force-push, or overwrite newer work.
+- Start from `docs/REPOSITORY_AUDIT_AND_REFERENCE_IMPROVEMENT_PLAN.md` and `docs/MASTER_REMEDIATION_CHECKLIST.md` where available. Revalidate findings against the current working tree because these are source-level triage documents, not proof of current runtime behaviour.
+- Inspect only the current call graph and tests needed to answer: which existing components already implement the requirement, which duplicate or disconnected components exist, where state/commands stop propagating, and what minimum wiring or correctness fix closes each gap.
+- Produce/update `docs/APP_SCREEN_CONNECTION_MATRIX.md`, `docs/REFERENCE_REPOSITORY_COMPARISON.md`, and `docs/AUTONOMY_IMPLEMENTATION_STATUS.md` only if missing or materially stale; preserve useful existing material.
+- After the narrow integration audit, proceed to the smallest approved vertical slice in the current phase. Do not require a second broad repository audit before every small fix. No broad rewrite.
 
 ### Phase 1 — Real device profile and capability registry
 - Implement/repair one canonical device profile with provenance, freshness, nullable fields, and failure states.
@@ -358,4 +359,130 @@ The application is ready to claim device-adaptive integrated behavior only when:
 - CI and relevant tests pass, and hardware claims have physical-device evidence where required.
 - Documentation identifies remaining limitations instead of hiding them.
 
-**First instruction to Jules:** Perform Phase 0 only. Audit and document the current repository and reference repositories; do not implement product features in the same change. Present the baseline and a proposed Phase 1 file-level plan, then proceed sequentially according to the repository's governance rules.
+**First instruction to Jules (updated):** Do not restart this project or treat it as greenfield. The repository already contains a substantial UI, device-profiling flow, typed hardware provenance/result contracts, a browser-side `UnifiedHardwareController`, native Android hardware management, task/approval/verification pieces, and several specialized screens/tools. Begin with the focused integration audit in Section 12, confirm the active branch's relationship to `main`, and identify the smallest real end-to-end connection gap. Then implement one minimal, regression-tested vertical slice allowed by the authoritative governance phase. Keep existing functionality and completed work. Report precisely what is connected, what remains disconnected, and what evidence proves it.
+
+
+---
+
+## 12. Existing implementation review — preserve and connect, do not rebuild
+
+This section supplements the earlier source-level audit. It is based on the inspected `main` snapshot at `aa413aa6df67ce73ad5a79eb038a37ae9b2efcfc` (2026-10-25) and selected source files. Jules must re-check current branch contents and newer commits before relying on this baseline. The roadmap branch and `main` have previously diverged, so branch alignment is a required first step.
+
+### 12.1 Existing work that must be reused where still present
+
+| Existing area | Source evidence seen | Required action |
+|---|---|---|
+| Dynamic hardware telemetry and provenance contracts | `src/hardware/types.ts` includes provenance statuses such as `MEASURED`, `ENUMERATED`, `ESTIMATED`, `UNAVAILABLE`, `UNSUPPORTED`, permission/error/stale states. | Preserve and complete these contracts. Do not introduce a second competing telemetry schema. |
+| Browser-side capability/controller layer | `src/hardware/UnifiedHardwareController.ts` contains a capability registry, sensor subscriptions, actuator locking, torch/media-stream handling, recommendations, and emergency-stop logic. | Keep it as the browser adapter/controller where appropriate; fix correctness gaps and connect it to actual app use cases. Do not assume browser APIs represent native Android hardware. |
+| Dynamic device probe | `src/utils/dynamicDeviceProbe.ts` calls the unified controller and exposes `DynamicDeviceTelemetry`. | Make this the existing browser-probe entry point unless call-graph evidence shows it is obsolete. Remove fallback substitution at consumers and retain provenance/freshness. |
+| Device/model profiling UI | `src/components/DeviceModelProfiler.tsx` already provides a substantial profiler/preset/model-candidate interface and consumes `probeLiveDeviceHardware`. | Do not replace the component wholesale. Connect its values and actions to measured telemetry, a real model catalog/compatibility service, and central selected-model state. Keep static presets visibly separate from live discovery, or remove misleading presets from production recommendations. |
+| Main app/dashboard and many tools | `src/App.tsx` contains numerous screens and panels including device/model profiling, pattern studios, optimization labs, agent-loop tooling, architecture viewers, and diagnostics. | Inventory actual navigation and callbacks. Wire existing screens to shared services/use cases incrementally. Do not create parallel duplicate screens for features that already exist. |
+| Native Android hardware path | Prior audit identified `app/src/main/java/com/example/core/hardware/HardwareManager.kt` and separate native telemetry/capability code. | Preserve native APIs as the Android adapter. Share domain contracts/policy with browser code where feasible, but do not force browser code to call Android-only APIs or conflate browser host data with phone data. |
+| Task approval and UI verification | Prior audit identified `TaskApprovalGate`, `StepVerifier`, task routing/control execution, and recovery paths. | Trace and connect these existing components; enforce policy at the final dispatcher and verify each action from fresh observations. Do not build a second approval system or verifier without proof the current ones cannot be repaired. |
+| Remote bridge hardening | Prior audit found loopback-by-default, bounded parsing, PIN masking, and failed-PIN lockout in earlier commits. | Preserve these controls and test them. Do not regress security while wiring screens or remote commands. |
+| Tests | Browser controller Vitest tests exist in `src/hardware/__tests__/UnifiedHardwareController.test.ts` in the reviewed `main` diff; native test coverage also exists in the repository. | Inspect and run existing tests first. Extend weak assertions and add regression coverage; never replace them with easier tests. |
+
+The table is an inventory of existing code, not a statement that every path works. Verify symbols and files on the active branch before editing.
+
+### 12.2 Specific integration/correctness gaps already identified
+
+These are high-priority review findings from the inspected source excerpts. Reproduce them on the active branch before fixing; record a status and evidence for each.
+
+**P0 — do not report successful live operation until corrected**
+1. **Fallbacks reintroduce fabricated values:** `DeviceModelProfiler.tsx` uses `dynamicProbe.totalRamMb || 4096`, `osOverheadMb || 1850`, and `activeAppBufferMb || 720`. `dynamicDeviceProbe.ts` also falls back to display dimensions 360×640, pixel ratio 1, and touch points 0. These values must not be rendered as live measurements. Keep unknown/null and expose provenance. Be careful: `||` also treats valid zero as missing; use explicit nullable/status handling, not another magic fallback.
+2. **LLM recommendation may be fabricated when RAM is unknown:** `UnifiedHardwareController.computeAdaptiveRecommendation` was observed naming SmolLM2-360M and claiming a conservative memory policy without measured device suitability. When critical resource data is unknown, return `CANNOT_DETERMINE` or a clearly labelled provisional estimate with assumptions; do not call it verified-compatible.
+3. **Requested actuator state is copied into observed state:** `updateObservedState()` was observed deriving `observedPhysicalState` from request parameters such as `params.enabled ?? true`. Separate requested state, command-dispatch result, and independently observed state. Only a real callback/measurement can establish observed state; otherwise retain unknown/unverified.
+4. **Dashboard flows can simulate hardware and print success:** `App.tsx` has a `compose light` path with hardcoded camera labels, timer-driven toggles/fixed pulse arrays and a `[PASS] Optical choreography executed` style claim; `apply recommended` changes UI/preset state and logs a memory-governor claim without evidence of runtime acknowledgement; `dump vault` and `benchmark` show fixed output/performance claims. Route real actions through the existing controller/executor and generate output from real result objects. If a simulation remains useful for design, label it SIMULATION and never present it as a physical-device result.
+5. **Emergency stop claims too much too early:** browser `emergencyStop()` was observed calling torch-off constraints without awaiting them, stopping tracks, and immediately reporting `SUCCESS_VERIFIED`; clearing a lock does not cancel every in-flight operation. Propagate cancellation, await bounded cleanup, use `finally` for resource release, and report unverified if physical state cannot be confirmed.
+6. **Approval gate may be bypassed:** the existence of `TaskApprovalGate.canExecute` is not proof every UI, recovery, skill, remote, or background entry point uses it. Trace every path to the final execution dispatcher and add negative tests that prove unauthorized actions never dispatch.
+7. **Action dispatch can be mistaken for completion:** some `ControlActuator` and generic/default command paths were observed returning success from dispatch text or generic status without a command-specific postcondition. Use existing `StepVerifier` where suitable; require fresh observation and explicit verification status for the target operation.
+
+**P1 — connect capability, screen, and adapter contracts**
+8. **Browser and Android paths are separate:** browser `UnifiedHardwareController` and native `HardwareManager` are separate runtime adapters. Do not make a giant cross-platform controller. Define or reuse a shared action/capability/result/policy contract; then route each platform through its own adapter and publish truthful outcomes into the common task/state model.
+9. **Browser discovery overstates physical hardware:** DeviceMotion/DeviceOrientation events are not a reliable enumeration of physical sensor inventory; enumerating video inputs does not prove torch support; missing labels and camera order do not prove front/rear position or dual emitters. Represent API/event availability separately from confirmed physical hardware capability. Probe torch support on a permissioned live track using actual capabilities and report unknown when not testable.
+10. **Waveform support varies by mode:** the reviewed browser controller only used actual torch on/off constraints for a subset such as `STROBE_BURST`; other wave formats may be visual/calculation-only. Audit each advertised pattern, await hardware calls, measure timing constraints, and either implement and verify it or label it unsupported/simulation. Do not promise sine-wave modulation if the device/browser API only supports discrete on/off.
+11. **Audio/haptics may be duplicated:** `App.tsx` was observed triggering `playWebAudioChime()` or `triggerHapticFeedback()` in addition to calling the controller. Choose one authoritative dispatch path; prevent duplicate sound/vibration and close/release audio resources on success, error, and cancellation.
+12. **Native sensor fallbacks remain suspect:** native `HardwareManager.onSensorChanged()` was observed substituting plausible values such as 0, 9.8, 5, or 1013.25 for missing event values. Preserve nullable/invalid readings and freshness; do not convert missing readings into measurements.
+13. **Wi-Fi/Bluetooth settings fallback is not a state change:** opening a settings panel or showing a user authorization prompt is an instruction/pending state, not actuator success. Use typed outcomes such as `SETTINGS_OPENED`, `AWAITING_USER_ACTION`, `COMMAND_ACCEPTED_UNVERIFIED`, and `SUCCESS_VERIFIED`; only update observed state from actual platform evidence.
+14. **Resource policy claims need actual backing:** fixed policy budgets such as `agentRamBudgetMb = 500` are not measured RAM. Clearly label estimates/policy limits and do not report that a governor was applied unless a runtime accepted and confirmed the setting.
+15. **Recovery must be state-aware:** before dismiss/retry/scroll/re-execute, inspect current state, risk, freshness, idempotency, and cancellation. A retry plan is not proof that the original action is safe to repeat.
+
+### 12.3 Model recommendation/download is an integration gap, not a request to build a static catalog UI
+
+The existing profiler/candidate structures are a starting point, not the finished model pipeline. First trace where candidates originate, whether they are static presets, how `onSelectPreset` is handled, whether any model artifact/catalog/runtime exists, and whether the selected candidate is actually loaded. Do not replace this work with another hardcoded array.
+
+Required connection sequence:
+1. Real profile service returns nullable facts plus provenance and freshness.
+2. A real versioned model catalog returns publisher, revision, artifact URL/page, license, format, quantization, artifact size, checksums/signature if available, and runtime constraints.
+3. A compatibility service compares measured facts with known requirements and emits a typed decision with reasons/uncertainty. Unknown critical facts must not yield VERIFIED.
+4. The existing profiler renders those decisions and invokes a use case; it does not calculate authoritative compatibility in component-local UI logic.
+5. Model details route to official source or a real download manager. Only offer in-app download when URL, license, expected size, runtime format, and integrity handling are defined.
+6. Download state comes from actual bytes and download service events; verify before install. Keep downloaded, verified, installed, loaded, and selected as distinct states.
+7. The runtime adapter loads/unloads the artifact, reports real errors, and returns actual runtime status. Keep the previous working model if a new load fails.
+8. Publish state changes to all relevant screens through the shared state owner/event stream. No other screen may independently invent or cache a conflicting “selected model” or “loaded” status.
+
+### 12.4 Branch and implementation synchronization
+
+The reviewed main HEAD was `aa413aa6df67ce73ad5a79eb038a37ae9b2efcfc`; the plan branch previously lagged/diverged from main. Before code edits:
+- Record active branch, HEAD, merge base with `main`, and ahead/behind counts.
+- Inspect all commits and changed paths on both sides, particularly device telemetry, controller types, profiler, app orchestration, native hardware manager, tests, and governance docs.
+- Do not assume this plan branch contains the newest fixes just because it contains the documentation. Do not silently port stale code over newer `main`.
+- Work only on the user-authorized working branch and use a non-destructive integration strategy consistent with repo governance. If branch policy is unclear, report the exact conflict and ask before merging.
+- Do not edit the reference repositories.
+
+---
+
+## 13. Updated execution order — connect the highest-value existing path first
+
+This order refines the broad phases above. It is deliberately integration-first and avoids creating duplicate architecture.
+
+### Slice 1 — Truthful profile -> profiler UI (first implementation slice after branch alignment)
+**Goal:** Make the existing device profile UI reflect the actual probe result, including unknown/error states, with no invented RAM/storage/display values.
+- Trace `probeLiveDeviceHardware` -> `DynamicDeviceTelemetry` -> `DeviceModelProfiler` -> `App.tsx` and every consumer.
+- Remove only confirmed fallback substitution and misleading labels; retain the existing provenance model.
+- Ensure refresh/error/stale state is shared and downstream recommendations recompute only from a fresh profile.
+- Add regression tests for null/exception/zero/stale values and component rendering.
+- Acceptance: when probe data is missing, no screen displays fabricated measurements or presents a verified model recommendation.
+
+### Slice 2 — Existing model candidates -> real compatibility decisions
+**Goal:** Connect the profiler's existing model UI to a real catalog/compatibility use case without duplicating the component.
+- Inventory any existing catalog, download, model runtime, and preset-selection handlers before implementation.
+- Reuse existing model metadata where its source/license/revision can be verified; label static presets as presets, not dynamic recommendations.
+- If no trustworthy catalog exists, implement the catalog contract and a clearly unavailable/error state first. Do not invent download URLs or model metadata.
+- Acceptance: every recommendation has traceable device facts, metadata, rules, and an explicit evidence level; missing critical inputs produce `CANNOT_DETERMINE`.
+
+### Slice 3 — One representative end-to-end task
+**Goal:** Connect current planner/router -> approval -> dispatcher/adapter -> fresh observation -> verifier -> persisted result -> UI.
+- Use the existing execution and verification components where viable.
+- Trace all execution entry points to ensure one non-bypassable policy boundary.
+- Pick the smallest safe scenario already supported by the code; if Android accessibility control is ready, use “Open Calculator and tap 7”.
+- Acceptance: evidence records show each lifecycle transition and a fresh command-specific postcondition. Failure paths must be honest and bounded.
+
+### Slice 4 — Connect existing screens by a data/action matrix
+**Goal:** Remove disconnected or misleading interactions without redesigning every screen.
+- For each control in the matrix, trace event handler -> use case/service -> platform adapter -> state update/event -> visible result.
+- Fix the highest-risk orphan/duplicate paths first (compose light, apply recommended, dump vault, benchmark, audio/haptic duplicate dispatch).
+- Remove or disable controls only after confirming they have no real implementation; do not delete functional features based solely on UI appearance.
+- Acceptance: no active control claims success without an actual result; no duplicate state owners for the same domain fact.
+
+### Slice 5 — Verify hardware and emergency-stop semantics
+**Goal:** Connect each advertised hardware action to real platform capability, lifecycle, and independent observation.
+- Separate browser and native adapters but share the same typed outcomes/policy.
+- Fix async await/cancellation/resource cleanup and state observation.
+- Acceptance: physical-device evidence for hardware claims; unsupported operations return unsupported/unverified, never success.
+
+Only after these slices are integrated and evidenced should Jules proceed to broader resilience, model download UX expansion, and release hardening. These slices do not authorize skipping governance gates; align each slice to the repository's authoritative phase scope first.
+
+## 14. Required output from Jules after each slice
+
+For each slice, report:
+- Baseline commit and branch relationship.
+- Existing components reused and why; duplicate/new components avoided.
+- Exact files changed and why each was necessary.
+- Before/after data flow from UI to use case to adapter to observation/result.
+- Tests added and exact commands/results, with separate emulator/physical-device evidence.
+- Any existing feature behavior that could regress and its regression test.
+- Remaining disconnected controls and next smallest fix.
+- Updated issue statuses with links to source/tests/CI evidence.
+
+Do not respond with only “implemented” or a large feature checklist. Include a short trace of one real operation and its evidence.
