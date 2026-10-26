@@ -233,14 +233,15 @@ class ReflectionAndRecoveryTest {
     }
 
     @Test
-    fun testAutonomousRecoveryEngine_prioritizesInterruptionBypass() = runBlocking {
+    fun testAutonomousRecoveryEngine_stopsForPermissionConsent() = runBlocking {
         val recoveryEngine = AutonomousRecoveryEngine()
 
         val allowButton = createNode(
             id = "btn_allow",
             className = "android.widget.Button",
             text = "While using the app",
-            isClickable = true
+            isClickable = true,
+            packageName = "com.google.android.permissioncontroller"
         )
         val interruptedSnapshot = UiSnapshot(
             packageName = "com.google.android.permissioncontroller",
@@ -261,9 +262,8 @@ class ReflectionAndRecoveryTest {
             durableStorage = null
         )
 
-        assertTrue("Strategy name should mention Interruption Bypass", plan.strategyName.contains("Interruption Bypass"))
-        assertEquals("First step must dismiss/grant interruption", 3, plan.alternativeCommands.size)
-        assertTrue(plan.alternativeCommands[0] is TaskCommand.ClickElement)
-        assertEquals(failedAction, plan.alternativeCommands[2])
+        assertTrue("Recovery must explicitly request user consent", plan.strategyName.contains("Permission Consent Required"))
+        assertTrue("Permission recovery must not synthesize any action", plan.alternativeCommands.isEmpty())
+        assertTrue("Reasoning must state why recovery stopped", plan.reasoning.contains("explicit user action"))
     }
 }
