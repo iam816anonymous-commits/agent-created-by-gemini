@@ -33,6 +33,14 @@ class AutonomousRecoveryEngine {
         // Studied from Mobile-Agent-v2 (Reflection Unit):
         // First check if an unexpected system modal / permission dialog is blocking the foreground
         val interruption = InterruptionDetector.assessSnapshot(preSnapshot)
+        if (interruption.type == InterruptionType.PERMISSION_DIALOG) {
+            return AdaptedRecoveryPlan(
+                strategyName = "Permission Consent Required",
+                reasoning = "${interruption.description} Recovery is stopped; no grant, dismiss, scroll, retry, or continuation command is generated.",
+                alternativeCommands = emptyList(),
+                searchSummary = "Permission dialog requires explicit user action; automatic recovery intentionally halted."
+            )
+        }
         if (interruption.isInterrupted && interruption.dismissCommand != null) {
             return AdaptedRecoveryPlan(
                 strategyName = "Interruption Bypass & Task Continuation (${interruption.type})",
@@ -42,7 +50,7 @@ class AutonomousRecoveryEngine {
                     TaskCommand.Delay(durationMs = 500L),
                     failedCommand
                 ),
-                searchSummary = "Automated interruption reflection resolved modal block."
+                searchSummary = "Automated non-permission interruption handling selected."
             )
         }
 
