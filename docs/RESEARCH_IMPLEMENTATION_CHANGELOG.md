@@ -18,12 +18,19 @@ This first implementation is deliberately limited to two safety properties inspi
 
 **Before:** `InterruptionDetector` created a click command for text such as “Allow” and the executor could dispatch it as automatic recovery. Failed target resolution could also trigger scroll exploration and retry/recovery.
 
-**After:** Permission-controller screens are classified as requiring explicit user action. The detector returns no grant/dismiss command. The live click executor stops before dispatch, retries and automated recovery, and records the result as inconclusive with a clear consent-required reason.
+**After:** Permission-controller screens are classified by the window package or node package and require explicit user action. The detector returns no grant/dismiss command. The live click executor stops before dispatch, retries and automated recovery, and records a consent-required inconclusive result.
 
-### 3. Regression coverage
+### 3. Missing live observations
 
-- Added resolver tests for empty observations, absent semantic matches and invalid coordinates.
+**Before:** If a live click had no current snapshot, target resolution failed but the self-healing path could still dispatch a scroll exploration gesture.
+
+**After:** A missing live snapshot stops the click step before any gesture, retry or automated recovery. The outcome is explicitly inconclusive rather than pretending the target could be safely resolved.
+
+### 4. Regression coverage
+
+- Added resolver tests for empty observations and absent semantic matches.
 - Updated the permission-interruption test to assert that no automated permission command is produced.
+- Added coverage for permission-controller node-package detection when the window package differs.
 
 ## Evidence and limitations
 
