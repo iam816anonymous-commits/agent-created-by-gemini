@@ -29,10 +29,11 @@ class ReflectionAndRecoveryTest {
         isEditable: Boolean = false,
         isFocused: Boolean = false,
         isScrollable: Boolean = false,
-        children: List<UiNode> = emptyList()
+        children: List<UiNode> = emptyList(),
+        packageName: String = "com.test.app"
     ): UiNode = UiNode(
         id = id,
-        packageName = "com.test.app",
+        packageName = packageName,
         className = className,
         text = text,
         contentDescription = null,
@@ -80,6 +81,27 @@ class ReflectionAndRecoveryTest {
         assertEquals("Should be PERMISSION_DIALOG type", InterruptionType.PERMISSION_DIALOG, assessment.type)
         assertEquals("Permission dialogs must never produce an automated grant/dismiss command", null, assessment.dismissCommand)
         assertTrue("Permission dialog description must require user action", assessment.description.contains("explicit user action"))
+    }
+
+    @Test
+    fun testInterruptionDetector_detectsPermissionControllerFromNodePackageWhenWindowPackageDiffers() {
+        val permissionNode = createNode(
+            id = "permission_root",
+            className = "android.widget.FrameLayout",
+            text = "Allow access?",
+            packageName = "com.android.permissioncontroller"
+        )
+        val snapshot = UiSnapshot(
+            packageName = "com.android.systemui",
+            rootNode = permissionNode,
+            totalNodeCount = 1,
+            isLive = true
+        )
+
+        val assessment = InterruptionDetector.assessSnapshot(snapshot)
+
+        assertEquals(InterruptionType.PERMISSION_DIALOG, assessment.type)
+        assertEquals(null, assessment.dismissCommand)
     }
 
     @Test
