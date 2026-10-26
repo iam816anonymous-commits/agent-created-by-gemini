@@ -40,7 +40,8 @@ This first implementation is deliberately limited to two safety properties inspi
 
 ## Evidence and limitations
 
-- Source changes and regression-test source are committed on a separate branch.
-- Unit tests and Android compilation have **not** been executed by this GitHub API editing workflow. CI results must be checked before merging.
-- Physical-device permission behavior and accessibility dispatch remain unverified until exercised on a device.
+- Source changes and regression-test updates are committed on a separate branch; no UI source files were changed.
+- The first CI run executed 71 unit tests and failed three legacy assertions that expected the now-disabled coordinate fallback or automatic permission bypass. Those assertions were updated to test the new safety contract rather than weaken unrelated coverage.
+- A subsequent CI run is in progress; the final result must be checked before considering the branch merge-ready. The Android APK build is downstream of unit tests and has not yet been confirmed for the latest changes.
+- Physical-device permission behavior, accessibility event timing, real target dispatch and post-action state verification remain **NOT VERIFIED** until exercised on a device.
 - No changes were made to main and no pull request was merged.
