@@ -121,8 +121,7 @@ class ActuatorController(private val context: Context) {
                 _isTorchOn.value = enabled
                 ActuatorResult(true, if (enabled) "Torch enabled" else "Torch disabled")
             } else {
-                _isTorchOn.value = enabled
-                ActuatorResult(true, "Flashlight state simulated: ${if (enabled) "ON" else "OFF"}")
+                ActuatorResult(false, "Flashlight hardware unavailable; no physical torch state was changed")
             }
         } catch (e: Exception) {
             ActuatorResult(false, "Flashlight actuation error: ${e.message}")
@@ -143,8 +142,7 @@ class ActuatorController(private val context: Context) {
                 _isTorchOn.value = enabled
                 ActuatorResult(true, "Camera flash index '$cameraIndex' set to ${if (enabled) "ON" else "OFF"}")
             } else {
-                _isTorchOn.value = enabled
-                ActuatorResult(true, "Camera flash index '$cameraIndex' simulated: ${if (enabled) "ON" else "OFF"}")
+                ActuatorResult(false, "Camera flash hardware/API unavailable; no physical torch state was changed")
             }
         } catch (e: Exception) {
             ActuatorResult(false, "Camera flash error on index '$cameraIndex': ${e.message}")

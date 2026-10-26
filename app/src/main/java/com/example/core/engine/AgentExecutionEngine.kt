@@ -100,17 +100,24 @@ class AgentExecutionEngine(
     var maxRetries: Int = 2
     var stabilizationDelayMs: Long = 800L
 
+    @Synchronized
     fun startTask(
         prompt: String,
         mode: com.example.core.model.ExecutionMode = com.example.core.model.ExecutionMode.LIVE_DEVICE,
         predefinedCommands: List<TaskCommand>? = null
     ) {
         if (executionJob?.isActive == true) {
-            executionJob?.cancel()
+            val activeExecutionId = _state.value.executionId
+            engineScope.launch {
+                repository.log(
+                    "WARN",
+                    "Engine",
+                    "Rejected a new task while execution '${activeExecutionId ?: "unknown"}' is active. Stop or cancel the active task before starting another.",
+                    activeExecutionId
+                )
+            }
+            return
         }
-
-        val service = LocalAgentAccessibilityService.instance
-        val isServiceConnected = service != null && LocalAgentAccessibilityService.isServiceConnected.value
 
         // Never silently downgrade a requested live task to simulation.
         // Simulation is only entered when the caller explicitly requests BENCHMARK/SIMULATION.
@@ -1038,8 +1045,12 @@ class AgentExecutionEngine(
 
     fun captureFreshObservation(): UiSnapshot? {
         val service = LocalAgentAccessibilityService.instance
+        val isLiveExecution = _state.value.executionMode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         val snapshot = if (service != null && LocalAgentAccessibilityService.isServiceConnected.value) {
             service.captureLiveSnapshot()
+        } else if (isLiveExecution) {
+            // No live service means no live observation. Never substitute benchmark state.
+            null
         } else {
             BenchmarkHarness.createCalculatorInitialSnapshot()
         }

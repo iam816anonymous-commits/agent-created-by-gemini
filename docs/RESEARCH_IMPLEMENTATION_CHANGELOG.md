@@ -55,3 +55,12 @@ This first implementation is deliberately limited to two safety properties inspi
 
 **UI constraint:** No approval action is currently wired from the existing UI to `TaskApprovalGate.approvePlan`. To honor the no-UI-change requirement, this patch fails closed and reports that approval is unavailable; sensitive tasks remain blocked until an approval path is implemented in a separately authorized UI change.
 
+
+
+### 7. Single execution ownership, live observation integrity, and physical actuator truth
+
+**Before:** Starting a new task cancelled an active task and immediately started another, allowing potential overlap during non-cancellable dispatch. A missing live accessibility service could also cause `captureFreshObservation()` to return a benchmark snapshot. The direct torch APIs reported simulated success and changed state even when no physical torch was available.
+
+**After:** A second task request is rejected while an execution is active; the current task must be stopped before another starts. Live observation returns `null` when the live service is unavailable rather than substituting benchmark state. Torch APIs return explicit failure when physical hardware/API support is unavailable and do not mutate physical-state telemetry.
+
+**Validation:** Added a regression test for truthful torch state. The current CI run must validate the latest commit; hardware-specific behavior remains NOT VERIFIED until tested on a physical device.

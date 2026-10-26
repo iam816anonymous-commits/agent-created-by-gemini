@@ -163,6 +163,23 @@ class ActuatorAndTelemetryTest {
     }
 
     @Test
+    fun testTorchActuationNeverReportsSimulatedPhysicalSuccess() {
+        val result = actuatorController.setTorch(true)
+
+        assertTrue("Actuator result must explain the physical outcome", result.message.isNotBlank())
+        assertTrue(
+            "Unavailable hardware must not be represented as simulated success",
+            !result.message.contains("simulated", ignoreCase = true)
+        )
+        if (result.isSuccess) {
+            assertTrue("Reported success must be reflected in actuator state", actuatorController.isTorchOn.value)
+        } else {
+            assertEquals("Failed physical actuation must not mutate torch state", false, actuatorController.isTorchOn.value)
+        }
+        actuatorController.resetAllActuators()
+    }
+
+    @Test
     fun testActuatorCleanupAndResetAllActuators() {
         // Trigger torch & verify reset
         actuatorController.setTorch(true)
