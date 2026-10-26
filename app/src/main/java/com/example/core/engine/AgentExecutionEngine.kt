@@ -560,16 +560,28 @@ class AgentExecutionEngine(
                 _state.update { it.copy(status = ExecutionStatus.RESOLVING_TARGET) }
 
                 var effectiveSnapshot = preSnapshot
-                if (useLive && effectiveSnapshot == null) {
+                val observationAgeMs = effectiveSnapshot?.let { System.currentTimeMillis() - it.timestampMs }
+                if (useLive && (
+                    effectiveSnapshot == null ||
+                    observationAgeMs == null ||
+                    observationAgeMs > 4000L ||
+                    observationAgeMs < 0L
+                )) {
+                    val observationReason = when {
+                        effectiveSnapshot == null -> "No live UI snapshot is available"
+                        observationAgeMs == null -> "Live UI snapshot age could not be determined"
+                        observationAgeMs < 0L -> "Live UI snapshot timestamp is in the future"
+                        else -> "Live UI snapshot is stale (${observationAgeMs}ms old; maximum age is 4000ms)"
+                    }
                     return StepExecutionRecord(
                         stepIndex = stepIndex,
                         commandSummary = command.displayName,
                         targetSelector = command.selector.toReadableDescription(),
                         dispatchedAction = null,
-                        preSnapshotId = null,
+                        preSnapshotId = effectiveSnapshot?.id,
                         postSnapshotId = null,
                         status = StepStatus.INCONCLUSIVE,
-                        verificationDetails = "SAFE_STOP: No fresh live UI snapshot is available; refusing click, scroll exploration, retry, and automated recovery.",
+                        verificationDetails = "SAFE_STOP: ${observationReason}; refusing click, scroll exploration, retry, and automated recovery.",
                         durationMs = System.currentTimeMillis() - stepStartTime
                     )
                 }
