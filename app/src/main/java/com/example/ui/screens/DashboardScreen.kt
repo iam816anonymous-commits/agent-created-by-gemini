@@ -102,7 +102,7 @@ fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 100% On-Device Offline Status Pill / Banner
+        // Runtime status banner derived from the current device and active execution backend.
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),

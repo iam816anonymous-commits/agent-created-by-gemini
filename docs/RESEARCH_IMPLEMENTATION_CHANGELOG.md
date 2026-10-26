@@ -91,3 +91,8 @@ This first implementation is deliberately limited to two safety properties inspi
 **After:** The task field starts empty; device identity and runtime status are derived from current capabilities; external observation uses OS readings and explicit unknown/unavailable values; invalid saved tasks and skills are rejected without dispatching demo actions; and saved-task/skill paths no longer auto-switch to simulation. Observation and timeline screens now display the captured snapshot and real execution-step outcomes, and history status colors/messages reflect the stored outcome.
 
 **Validation:** Latest CI must verify compilation and tests. UI interaction testing and physical-device telemetry verification remain NOT VERIFIED.
+
+
+### 11. Remaining hard-coded runtime claims
+
+Removed the fixed TECNO/offline runtime log and the self-check's claim that passing local checks proves zero-cloud operation. The remote-server wrapper no longer supplies a hard-coded pairing token; the bridge's existing cryptographically generated per-session PIN remains the default. Added a regression test ensuring unavailable telemetry defaults to explicit unknown values.

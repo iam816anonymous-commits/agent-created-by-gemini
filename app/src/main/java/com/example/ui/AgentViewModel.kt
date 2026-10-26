@@ -219,7 +219,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "System",
-                message = "LocalAgent runtime active on TECNO IN6 profile (100% On-Device)",
+                message = "LocalAgent runtime initialized. Live device control depends on enabled system capabilities.",
                 level = com.example.core.model.ConsoleLogLevel.INFO
             )
         )
@@ -450,7 +450,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 storagePassed = sPassed,
                 storageLatencyMs = sLatency,
                 allPassed = allPassed,
-                summary = if (allPassed) "All 5 offline modules verified! LocalAgent runs 100% on-device with zero cloud telemetry." else "One or more offline checks encountered an issue."
+                summary = if (allPassed) "All 5 offline self-check modules passed. These checks validate local components only; they do not prove device-wide offline operation or physical UI execution." else "One or more offline checks encountered an issue."
             )
         }
     }
@@ -534,7 +534,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startRemoteServer(port: Int = com.example.core.remote.RemoteAgentBridge.DEFAULT_PORT, token: String = "JARVIS-SECURE-9942") {
+    fun startRemoteServer(port: Int = com.example.core.remote.RemoteAgentBridge.DEFAULT_PORT, token: String? = null) {
         remoteAgentBridge.startServer(port, token)
     }
 
@@ -984,7 +984,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         val networkDescription = try {
             val connectivity = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
             val activeNetwork = connectivity?.activeNetwork
-            val networkCapabilities = activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
+            val networkCapabilities = if (connectivity != null && activeNetwork != null) connectivity.getNetworkCapabilities(activeNetwork) else null
             when {
                 networkCapabilities == null -> "Disconnected or unavailable"
                 !networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) ->

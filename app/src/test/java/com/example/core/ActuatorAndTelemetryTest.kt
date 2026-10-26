@@ -180,6 +180,19 @@ class ActuatorAndTelemetryTest {
     }
 
     @Test
+    fun testExternalObservationDefaultsUseUnknownRatherThanFabricatedTelemetry() {
+        val observation = com.example.core.model.ExternalObservationData()
+
+        assertEquals("Unknown", observation.foregroundPackage)
+        assertEquals("Unknown", observation.windowTitle)
+        assertEquals("Unknown", observation.displayMetrics)
+        assertEquals(-1, observation.batteryPct)
+        assertEquals("Unknown", observation.networkMode)
+        assertEquals(-1L, observation.memoryUsageMb)
+        assertEquals("Unknown", observation.thermalState)
+    }
+
+    @Test
     fun testActuatorCleanupAndResetAllActuators() {
         // Trigger torch & verify reset
         actuatorController.setTorch(true)
