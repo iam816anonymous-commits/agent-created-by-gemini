@@ -380,7 +380,7 @@ class AgentExecutionEngine(
                 } else if (
                     stepResult.status == StepStatus.SUCCESS ||
                     retryCount >= maxRetries ||
-                    stepResult.verificationDetails.startsWith("USER_CONSENT_REQUIRED:")
+                    stepResult.verificationDetails.startsWith("SAFE_STOP:")
                 ) {
                     stepOutcome = stepResult
                 } else {
@@ -427,8 +427,8 @@ class AgentExecutionEngine(
                 )
             }
 
-            if (finalRecord.verificationDetails.startsWith("USER_CONSENT_REQUIRED:")) {
-                val reason = finalRecord.verificationDetails.removePrefix("USER_CONSENT_REQUIRED:").trim()
+            if (finalRecord.verificationDetails.startsWith("SAFE_STOP:")) {
+                val reason = finalRecord.verificationDetails.removePrefix("SAFE_STOP:").trim()
                 completeExecution(
                     executionId,
                     ExecutionStatus.COMPLETED_FAILURE,
@@ -560,6 +560,19 @@ class AgentExecutionEngine(
                 _state.update { it.copy(status = ExecutionStatus.RESOLVING_TARGET) }
 
                 var effectiveSnapshot = preSnapshot
+                if (useLive && effectiveSnapshot == null) {
+                    return StepExecutionRecord(
+                        stepIndex = stepIndex,
+                        commandSummary = command.displayName,
+                        targetSelector = command.selector.toReadableDescription(),
+                        dispatchedAction = null,
+                        preSnapshotId = null,
+                        postSnapshotId = null,
+                        status = StepStatus.INCONCLUSIVE,
+                        verificationDetails = "SAFE_STOP: No fresh live UI snapshot is available; refusing click, scroll exploration, retry, and automated recovery.",
+                        durationMs = System.currentTimeMillis() - stepStartTime
+                    )
+                }
                 var resolution = resolver.resolve(command.selector, effectiveSnapshot)
 
                 if (useLive && service != null) {
@@ -573,7 +586,7 @@ class AgentExecutionEngine(
                             preSnapshotId = effectiveSnapshot?.id,
                             postSnapshotId = null,
                             status = StepStatus.INCONCLUSIVE,
-                            verificationDetails = "USER_CONSENT_REQUIRED: ${interruption.description} LocalAgent stopped this step without granting, dismissing, scrolling past, or retrying the dialog.",
+                            verificationDetails = "SAFE_STOP: ${interruption.description} Permission authorization is required; LocalAgent stopped this step without granting, dismissing, scrolling past, or retrying the dialog.",
                             durationMs = System.currentTimeMillis() - stepStartTime
                         )
                     }
