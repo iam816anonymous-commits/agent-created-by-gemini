@@ -91,17 +91,17 @@ class ActuatorAndTelemetryTest {
             isLive = true
         )
 
-        // 1. Valid normalized coordinates
+        // 1. Even valid normalized coordinates cannot prove a target exists.
         val validSelector = TargetSelector(
             text = "Target",
             fallbackNormalizedX = 0.5f,
             fallbackNormalizedY = 0.25f
         )
         val validResult = targetResolver.resolve(validSelector, emptySnapshot)
-        assertTrue("Valid normalized coordinates should succeed via Stage-4 fallback", validResult is TargetResolver.ResolutionResult.Success)
-        val match = (validResult as TargetResolver.ResolutionResult.Success).match
-        assertTrue("Match reason must indicate UNVERIFIED fallback", match.matchReason.contains("UNVERIFIED Stage-4"))
-        assertEquals("Score for coordinate fallback must be 20", 20, match.score)
+        assertTrue(
+            "Coordinate-only fallback must fail when no accessible target evidence exists",
+            validResult is TargetResolver.ResolutionResult.Failure
+        )
 
         // 2. Invalid out-of-bounds normalized coordinates
         val invalidSelector = TargetSelector(
