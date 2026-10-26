@@ -96,3 +96,8 @@ This first implementation is deliberately limited to two safety properties inspi
 ### 11. Remaining hard-coded runtime claims
 
 Removed the fixed TECNO/offline runtime log and the self-check's claim that passing local checks proves zero-cloud operation. The remote-server wrapper no longer supplies a hard-coded pairing token; the bridge's existing cryptographically generated per-session PIN remains the default. Added a regression test ensuring unavailable telemetry defaults to explicit unknown values.
+
+
+### 12. Native UI control wiring and user feedback
+
+The Recorder tab now exposes recorded interaction count, synthesized preview review, save/run actions, and execution of saved skills/recordings. The Device tab exposes the existing flashlight, haptic, tone, Wi-Fi and Bluetooth control methods, with operation feedback; Wi-Fi/Bluetooth may open Android's system control panel where direct changes are restricted. History rows can load persisted step records, and the Observation/Timeline screens display real captured nodes and execution outcomes. Task execution now reports empty-input and unavailable/invalid task outcomes rather than silently doing nothing.

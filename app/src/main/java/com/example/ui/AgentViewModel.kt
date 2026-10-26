@@ -56,6 +56,7 @@ enum class ObservationSubTab(val label: String) {
 
 data class AgentUiState(
     val taskInput: String = "",
+    val actionFeedback: String? = null,
     val selectedTab: AgentTab = AgentTab.DASHBOARD,
     val selectedExecutionId: String? = null,
     val inspectionFilterText: String = "",
@@ -230,10 +231,15 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshCapabilities() {
         _deviceCapabilities.value = capabilityDetector.detectCapabilities()
         _storageMetrics.value = capabilityDetector.getStorageMetrics()
+        hardwareManager.refreshHardwareStates()
+    }
+
+    private fun publishActionFeedback(message: String) {
+        _uiState.update { it.copy(actionFeedback = message) }
     }
 
     fun setTaskInput(prompt: String) {
-        _uiState.update { it.copy(taskInput = prompt) }
+        _uiState.update { it.copy(taskInput = prompt, actionFeedback = null) }
     }
 
     fun setSelectedTab(tab: AgentTab) {
@@ -287,26 +293,39 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     fun startVisualRecording() {
         _synthesizedTaskPreview.value = null
         visualRecorder.startRecording()
+        publishActionFeedback("Recording started. Interactions will be collected by the accessibility recorder.")
     }
 
     fun stopVisualRecording() {
         val events = visualRecorder.stopRecording()
         if (events.isNotEmpty()) {
             synthesizeRecordedFlow(events)
+        } else {
+            publishActionFeedback("Recording stopped, but no interactions were captured. Check that Accessibility is enabled and the recorder received events.")
         }
     }
 
     fun clearRecording() {
         visualRecorder.clear()
         _synthesizedTaskPreview.value = null
+        publishActionFeedback("Recorded interactions and the synthesized preview were cleared.")
     }
 
     fun synthesizeRecordedFlow(events: List<RecordedInteraction> = visualRecorder.recordedEvents.value) {
+        if (events.isEmpty()) {
+            _synthesizedTaskPreview.value = null
+            publishActionFeedback("Cannot synthesize a skill because no interactions were recorded.")
+            return
+        }
         val task = taskSynthesizer.synthesize(
             interactions = events,
             taskName = _uiState.value.recordingTaskName.ifBlank { "Recorded Flow" }
         )
         _synthesizedTaskPreview.value = task
+        publishActionFeedback(
+            if (task.commands.isEmpty()) "Recorded interactions did not produce executable commands."
+            else "Preview created: ${task.commands.size} executable command(s). Review before saving or running."
+        )
     }
 
     fun recordManualTap(node: UiNode?, label: String) {
@@ -327,10 +346,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveAndExecuteSynthesizedTask(task: SynthesizedTask) {
         if (task.commands.isEmpty()) {
+            val message = "Cannot save or execute '${task.name}': the recording did not produce executable commands."
+            publishActionFeedback(message)
             addLiveConsoleEntry(
                 com.example.core.model.LiveConsoleEntry(
                     tag = "Recorder",
-                    message = "Cannot save or execute '${task.name}': the recording did not produce executable commands.",
+                    message = message,
                     level = com.example.core.model.ConsoleLogLevel.WARNING
                 )
             )
@@ -348,15 +369,28 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveSynthesizedTask() {
-        val preview = _synthesizedTaskPreview.value ?: return
+        val preview = _synthesizedTaskPreview.value
+        if (preview == null) {
+            publishActionFeedback("There is no synthesized preview to save.")
+            return
+        }
+        if (preview.commands.isEmpty()) {
+            publishActionFeedback("Cannot save this preview because it has no executable commands.")
+            return
+        }
         viewModelScope.launch {
             repository.saveSynthesizedTask(preview)
             _synthesizedTaskPreview.value = null
+            publishActionFeedback("Saved skill '${preview.name}'.")
         }
     }
 
     fun executeSynthesizedPreview() {
-        val preview = _synthesizedTaskPreview.value ?: return
+        val preview = _synthesizedTaskPreview.value
+        if (preview == null) {
+            publishActionFeedback("There is no synthesized preview to execute.")
+            return
+        }
         saveAndExecuteSynthesizedTask(preview)
     }
 
@@ -373,10 +407,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
         val commands = decoded.ifEmpty { parser.parse(taskEntity.name) }
         if (commands.isEmpty()) {
+            val message = "Saved task '${taskEntity.name}' has no valid command payload and its name is not parseable. Nothing was executed."
+            publishActionFeedback(message)
             addLiveConsoleEntry(
                 com.example.core.model.LiveConsoleEntry(
                     tag = "Recorder",
-                    message = "Saved task '${taskEntity.name}' has no valid command payload and its name is not parseable. Nothing was executed.",
+                    message = message,
                     level = com.example.core.model.ConsoleLogLevel.WARNING
                 )
             )
@@ -463,7 +499,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     // Execution Controls
     fun startTask(runAsBenchmark: Boolean = false) {
-        val prompt = _uiState.value.taskInput
+        val prompt = _uiState.value.taskInput.trim()
+        if (prompt.isBlank()) {
+            publishActionFeedback("Enter a task or choose a preset before starting execution.")
+            return
+        }
+        publishActionFeedback(if (runAsBenchmark) "Starting explicit benchmark run." else "Starting live-device task.")
         if (prompt.isNotBlank()) {
             val matchingSkill = allSkills.value.firstOrNull { skillEntity ->
                 val triggers = skillEntity.triggerPhrases.split(",").map { it.trim().lowercase() }
@@ -549,10 +590,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             parser.parse(skillEntity.name)
         }
         if (decoded.isEmpty()) {
+            val message = "Skill '${skillEntity.name}' has no executable commands. Nothing was executed."
+            publishActionFeedback(message)
             addLiveConsoleEntry(
                 com.example.core.model.LiveConsoleEntry(
                     tag = "Skills",
-                    message = "Skill '${skillEntity.name}' has no executable commands. Nothing was executed.",
+                    message = message,
                     level = com.example.core.model.ConsoleLogLevel.WARNING
                 )
             )
@@ -673,7 +716,11 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun captureFreshObservation() {
-        engine.captureFreshObservation()
+        val snapshot = engine.captureFreshObservation()
+        publishActionFeedback(
+            if (snapshot == null) "No live observation is available. Check that the Accessibility service is enabled and the target app is visible."
+            else "Captured ${snapshot.totalNodeCount} node(s) from ${snapshot.packageName} (${if (snapshot.isLive) "live" else "diagnostic"} snapshot)."
+        )
         _uiState.update { it.copy(selectedTab = AgentTab.OBSERVATION) }
     }
 
@@ -758,6 +805,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     // Actuator Controls
     fun triggerHapticPulse(durationMs: Long = 150L) {
         val res = actuatorController.vibrateHaptic(durationMs)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -769,6 +817,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerHapticBurst() {
         val res = actuatorController.vibratePattern()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -780,6 +829,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleFlashlight() {
         val res = actuatorController.toggleTorch()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -791,6 +841,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerAudioTone() {
         val res = actuatorController.playTone()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -802,6 +853,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setActuatorVolume(percent: Int) {
         val res = actuatorController.setVolume(android.media.AudioManager.STREAM_MUSIC, percent)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -813,6 +865,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun launchHardwareSetting(action: String) {
         val res = actuatorController.openSystemSetting(action)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -824,6 +877,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleWifi() {
         val res = hardwareManager.toggleWifi()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -835,6 +889,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setWifi(enabled: Boolean) {
         val res = hardwareManager.setWifiEnabled(enabled)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -846,6 +901,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleBluetooth() {
         val res = hardwareManager.toggleBluetooth()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -857,6 +913,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBluetooth(enabled: Boolean) {
         val res = hardwareManager.setBluetoothEnabled(enabled)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",

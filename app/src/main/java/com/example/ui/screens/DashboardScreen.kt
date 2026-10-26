@@ -605,6 +605,15 @@ fun DashboardScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                uiState.actionFeedback?.let { feedback ->
+                    Text(
+                        text = feedback,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
@@ -676,7 +685,7 @@ fun DashboardScreen(
                     } else {
                         Button(
                             onClick = { viewModel.startTask(runAsBenchmark = false) },
-                            enabled = capabilities.isAccessibilityEnabled,
+                            enabled = capabilities.isAccessibilityEnabled && uiState.taskInput.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = CyberCyanPrimary,
                                 contentColor = Color.Black
@@ -693,6 +702,7 @@ fun DashboardScreen(
 
                         OutlinedButton(
                             onClick = { viewModel.startTask(runAsBenchmark = true) },
+                            enabled = uiState.taskInput.isNotBlank(),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.primary
                             ),
