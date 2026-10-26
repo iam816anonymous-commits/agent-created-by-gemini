@@ -806,10 +806,10 @@ class AgentExecutionEngine(
         // 2. Capture Post-Action Snapshot (RULE: Fresh snapshot, never reuse pre-action!)
         _state.update { it.copy(status = ExecutionStatus.VERIFYING, statusMessage = "Capturing fresh post-action observation...") }
 
-        val postSnapshot = if (useLive && service != null) {
-            service.captureLiveSnapshot()
+        val postSnapshot = if (useLive) {
+            service?.captureLiveSnapshot()
         } else {
-            // For delay or general verification, return current benchmark state
+            // Simulated state is valid only in simulation/test modes, never as live-device evidence.
             simulatedState
         }
         SnapshotStorage.saveSnapshot(postSnapshot)
