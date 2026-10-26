@@ -73,10 +73,10 @@ class ThreeFunctionalitiesBatchTest {
     }
 
     // =========================================================================
-    // Functionality 2 Test: TargetResolver Stage-4 Normalized Coordinate Fallback
+    // Functionality 2 Test: Coordinate-only targets require semantic evidence
     // =========================================================================
     @Test
-    fun testTargetResolver_stage4CoordinateFallbackWhenNodesUnexposed() {
+    fun testTargetResolver_rejectsCoordinateOnlyTargetWhenNodesUnexposed() {
         val resolver = TargetResolver()
 
         val snapshot = UiSnapshot(
@@ -86,7 +86,6 @@ class ThreeFunctionalitiesBatchTest {
             isLive = true
         )
 
-        // Selector with normalized coordinates [0.5, 0.25]
         val selector = TargetSelector(
             text = "Game Start",
             fallbackNormalizedX = 0.5f,
@@ -94,13 +93,10 @@ class ThreeFunctionalitiesBatchTest {
         )
 
         val result = resolver.resolve(selector, snapshot)
-        assertTrue("Should succeed via Stage-4 coordinate fallback", result is TargetResolver.ResolutionResult.Success)
-
-        val success = result as TargetResolver.ResolutionResult.Success
-        val match = success.match
-        assertTrue("Match reason must mention Stage-4 fallback", match.matchReason.contains("Stage-4"))
-        assertEquals(540, match.clickCoordinates?.first)
-        assertEquals(600, match.clickCoordinates?.second)
+        assertTrue(
+            "Resolver must not manufacture a successful target from coordinates alone",
+            result is TargetResolver.ResolutionResult.Failure
+        )
     }
 
     // =========================================================================
