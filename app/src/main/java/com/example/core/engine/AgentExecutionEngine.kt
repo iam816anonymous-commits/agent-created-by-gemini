@@ -550,23 +550,29 @@ class AgentExecutionEngine(
         val useLive = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         val service = LocalAgentAccessibilityService.instance
 
-        if (useLive && service == null) {
-            val requiresService = command is TaskCommand.ClickElement || command is TaskCommand.EnterText ||
-                    command is TaskCommand.Scroll || command is TaskCommand.OpenDrawer ||
-                    command is TaskCommand.WaitForElement || command is TaskCommand.VerifyCondition
-            if (requiresService) {
-                return StepExecutionRecord(
-                    stepIndex = stepIndex,
-                    commandSummary = command.displayName,
-                    targetSelector = extractTargetSelectorDesc(command),
-                    dispatchedAction = null,
-                    preSnapshotId = null,
-                    postSnapshotId = null,
-                    status = StepStatus.FAILURE,
-                    verificationDetails = "Accessibility service unavailable in LIVE_DEVICE mode. Refusing to substitute simulated action.",
-                    durationMs = System.currentTimeMillis() - stepStartTime
-                )
-            }
+        val requiresLiveUiObservation =
+            command is TaskCommand.ClickElement ||
+                command is TaskCommand.EnterText ||
+                command is TaskCommand.Scroll ||
+                command is TaskCommand.OpenDrawer ||
+                command is TaskCommand.WaitForElement ||
+                (command is TaskCommand.VerifyCondition &&
+                    command.rule !is com.example.core.model.VerificationRule.AlwaysPass)
+
+        if (useLive && requiresLiveUiObservation &&
+            (service == null || !LocalAgentAccessibilityService.isServiceConnected.value)
+        ) {
+            return StepExecutionRecord(
+                stepIndex = stepIndex,
+                commandSummary = command.displayName,
+                targetSelector = extractTargetSelectorDesc(command),
+                dispatchedAction = null,
+                preSnapshotId = null,
+                postSnapshotId = null,
+                status = StepStatus.INCONCLUSIVE,
+                verificationDetails = "SAFE_STOP: Accessibility service is unavailable or disconnected in LIVE_DEVICE mode; refusing to dispatch UI actions or substitute simulated state.",
+                durationMs = System.currentTimeMillis() - stepStartTime
+            )
         }
 
         // 1. Capture Pre-Action Snapshot
@@ -584,6 +590,50 @@ class AgentExecutionEngine(
                 status = ExecutionStatus.RESOLVING_TARGET,
                 statusMessage = "Resolving target for: ${command.displayName}"
             )
+        }
+
+        // Enforce freshness and permission-consent checks at the executor boundary,
+        // not only inside ClickElement. This also protects text, scroll, drawer,
+        // wait, and verification commands from acting on stale or blocked UI.
+        if (useLive && requiresLiveUiObservation) {
+            val observationAgeMs = preSnapshot?.let { System.currentTimeMillis() - it.timestampMs }
+            val observationProblem = when {
+                preSnapshot == null -> "No live UI snapshot is available"
+                observationAgeMs == null -> "Live UI snapshot age could not be determined"
+                observationAgeMs < 0L -> "Live UI snapshot timestamp is in the future"
+                observationAgeMs > 4000L -> "Live UI snapshot is stale (${observationAgeMs}ms old; maximum age is 4000ms)"
+                else -> null
+            }
+            if (observationProblem != null) {
+                return StepExecutionRecord(
+                    stepIndex = stepIndex,
+                    commandSummary = command.displayName,
+                    targetSelector = extractTargetSelectorDesc(command),
+                    dispatchedAction = null,
+                    preSnapshotId = preSnapshot?.id,
+                    postSnapshotId = null,
+                    status = StepStatus.INCONCLUSIVE,
+                    verificationDetails = "SAFE_STOP: ${observationProblem}; refusing UI dispatch, exploration, retry, or automated recovery.",
+                    durationMs = System.currentTimeMillis() - stepStartTime
+                )
+            }
+        }
+
+        if (useLive && preSnapshot != null) {
+            val interruption = com.example.core.reflection.InterruptionDetector.assessSnapshot(preSnapshot)
+            if (interruption.type == com.example.core.reflection.InterruptionType.PERMISSION_DIALOG) {
+                return StepExecutionRecord(
+                    stepIndex = stepIndex,
+                    commandSummary = command.displayName,
+                    targetSelector = extractTargetSelectorDesc(command),
+                    dispatchedAction = null,
+                    preSnapshotId = preSnapshot.id,
+                    postSnapshotId = null,
+                    status = StepStatus.INCONCLUSIVE,
+                    verificationDetails = "SAFE_STOP: ${interruption.description} Explicit user authorization is required; no task action was dispatched.",
+                    durationMs = System.currentTimeMillis() - stepStartTime
+                )
+            }
         }
 
         var dispatchedActionDesc: String? = null

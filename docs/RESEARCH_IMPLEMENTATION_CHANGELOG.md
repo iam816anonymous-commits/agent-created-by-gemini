@@ -73,3 +73,12 @@ This first implementation is deliberately limited to two safety properties inspi
 **After:** A `RUNNING` execution record is persisted before planning starts; each step attempt writes a durable journal entry before entering the executor; and every live step deliberates using a newly requested live observation. The agent does not automatically resume or replay a task after process death.
 
 **Limitation:** Automatic startup reconciliation of orphaned `RUNNING` records and physical process-kill tests are still outstanding. A durable journal improves evidence but does not, by itself, prove whether a system action completed.
+
+
+### 9. Executor-boundary safety for every UI command
+
+**Before:** Missing/stale observation and permission-dialog guards were concentrated in the click path. Text entry, scroll, drawer, wait, and verification commands could therefore reach different handling paths.
+
+**After:** The executor now checks live-service connectivity, snapshot freshness, and permission-controller state before any UI-observation-dependent command. A detected permission dialog stops the whole step before app launch or other task action as well. Safe stops are terminal for the current task and are not retried or sent to automated recovery.
+
+**Validation:** Regression coverage for permission classification and recovery already exists; the latest CI run must confirm compilation and tests for the executor-boundary change. Physical-device validation remains NOT VERIFIED.
