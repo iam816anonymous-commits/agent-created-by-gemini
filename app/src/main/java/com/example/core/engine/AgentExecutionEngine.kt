@@ -523,8 +523,8 @@ class AgentExecutionEngine(
         }
 
         // 1. Capture Pre-Action Snapshot
-        val preSnapshot = if (useLive && service != null) {
-            service.captureLiveSnapshot()
+        val preSnapshot = if (useLive) {
+            service?.captureLiveSnapshot()
         } else {
             simulatedState
         }
