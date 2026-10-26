@@ -44,14 +44,6 @@ object InterruptionDetector {
         "com.android.packageinstaller"
     )
 
-    private val ALLOW_BUTTON_TEXTS = listOf(
-        "While using the app",
-        "Only this time",
-        "Allow",
-        "GRANT",
-        "Continue"
-    )
-
     private val DISMISS_BUTTON_TEXTS = listOf(
         "Dismiss",
         "Cancel",
@@ -69,26 +61,15 @@ object InterruptionDetector {
 
         val pkg = snapshot.packageName.lowercase()
 
-        // 1. Android Permission Controller Interruption
+        // 1. Android Permission Controller Interruption.
+        // Never synthesize an Allow/Grant click: the user must decide on the system dialog.
         if (PERMISSION_PACKAGES.any { pkg.contains(it) }) {
-            val allNodes = snapshot.allNodes
-            val allowNode = allNodes.firstOrNull { node ->
-                val txt = node.text?.trim() ?: ""
-                ALLOW_BUTTON_TEXTS.any { txt.equals(it, ignoreCase = true) }
-            }
-
-            if (allowNode != null) {
-                val buttonText = allowNode.text?.trim() ?: "Allow"
-                return InterruptionAssessment(
-                    isInterrupted = true,
-                    type = InterruptionType.PERMISSION_DIALOG,
-                    dismissCommand = TaskCommand.ClickElement(
-                        selector = TargetSelector(text = buttonText, clickableOnly = false),
-                        targetLabel = "Permission: '$buttonText'"
-                    ),
-                    description = "Detected Android permission request dialog in '$pkg'. Prepared grant/dismiss command."
-                )
-            }
+            return InterruptionAssessment(
+                isInterrupted = true,
+                type = InterruptionType.PERMISSION_DIALOG,
+                dismissCommand = null,
+                description = "Detected Android permission request dialog in '$pkg'; explicit user action is required."
+            )
         }
 
         // 2. Android ANR / System crash dialog
