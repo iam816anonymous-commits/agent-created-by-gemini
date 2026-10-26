@@ -258,21 +258,21 @@ enum class ConsoleLogLevel {
 
 data class ExternalObservationData(
     val timestampMs: Long = System.currentTimeMillis(),
-    val foregroundPackage: String = "com.example",
-    val windowTitle: String = "LocalAgent Dashboard",
-    val displayMetrics: String = "1080x2400 @ 440dpi (60Hz)",
-    val batteryPct: Int = 85,
+    val foregroundPackage: String = "Unknown",
+    val windowTitle: String = "Unknown",
+    val displayMetrics: String = "Unknown",
+    val batteryPct: Int = -1,
     val isCharging: Boolean = false,
-    val networkMode: String = "Network Isolated / Airplane Mode Capable",
-    val memoryUsageMb: Long = 42L,
-    val thermalState: String = "Nominal (Safe Execution)"
+    val networkMode: String = "Unknown",
+    val memoryUsageMb: Long = -1L,
+    val thermalState: String = "Unknown"
 )
 
 data class DurableMemoryBackup(
     val version: Int = 1,
     val timestampMs: Long = System.currentTimeMillis(),
     val taskCount: Int = 0,
-    val deviceModel: String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim().ifEmpty { "TECNO IN6" },
+    val deviceModel: String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim().ifEmpty { "Unknown device" },
     val checksum: String = ""
 )
 

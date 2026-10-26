@@ -150,6 +150,31 @@ fun ObservationScreen(
                 }
             }
         }
+
+        val snapshot = engineState.latestObservation
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Latest observation", fontWeight = FontWeight.Bold, color = CyberCyanPrimary)
+                if (snapshot == null) {
+                    Text("No observation captured yet.", color = Color.LightGray, fontSize = 12.sp)
+                } else {
+                    Text("Source: ${snapshot.sourceDescription}", color = Color.LightGray, fontSize = 12.sp)
+                    Text("Package: ${snapshot.packageName}", color = Color.White, fontSize = 12.sp)
+                    Text("Nodes: ${snapshot.totalNodeCount} • Live: ${snapshot.isLive}", color = Color.LightGray, fontSize = 12.sp)
+                    Text("Captured: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(snapshot.timestampMs))}", color = Color.Gray, fontSize = 11.sp)
+                    snapshot.allNodes.take(40).forEach { node ->
+                        Text(
+                            text = "${node.text?.takeIf { it.isNotBlank() } ?: node.contentDescription?.takeIf { it.isNotBlank() } ?: node.className} • ${if (node.isClickable) "clickable" else "read-only"}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -183,10 +208,30 @@ fun TimelineScreen(
                     color = CyberCyanPrimary
                 )
                 Text(
-                    text = "Step index: ${engineState.currentStepIndex}",
+                    text = "Step index: ${engineState.currentStepIndex}/${engineState.totalSteps}",
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
+                Text(engineState.statusMessage, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                engineState.failureReason?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+            }
+        }
+        engineState.steps.forEach { step ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${step.stepIndex}. ${step.commandSummary}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(step.status.name, fontSize = 11.sp, color = when (step.status) {
+                        com.example.core.model.StepStatus.SUCCESS -> StatusSuccess
+                        com.example.core.model.StepStatus.FAILURE,
+                        com.example.core.model.StepStatus.TIMEOUT -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    })
+                    Text(step.verificationDetails, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${step.durationMs} ms", fontSize = 10.sp, color = Color.Gray)
+                }
             }
         }
     }
@@ -224,9 +269,26 @@ fun HistoryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(text = record.prompt, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = record.status, color = StatusSuccess, fontSize = 11.sp)
+                        Text(
+                            text = record.status,
+                            color = when {
+                                record.status.contains("SUCCESS", ignoreCase = true) -> StatusSuccess
+                                record.status.contains("FAIL", ignoreCase = true) ||
+                                    record.status.contains("TIMEOUT", ignoreCase = true) -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontSize = 11.sp
+                        )
                     }
-                    Text(text = record.failureReason ?: "Success (${record.successfulSteps}/${record.totalSteps} steps)", fontSize = 11.sp, color = Color.Gray)
+                    Text(
+                        text = record.failureReason ?: if (record.status.contains("SUCCESS", ignoreCase = true)) {
+                            "Completed: ${record.successfulSteps}/${record.totalSteps} steps"
+                        } else {
+                            "No failure details recorded."
+                        },
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
                 }
             }
         }

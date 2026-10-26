@@ -82,3 +82,12 @@ This first implementation is deliberately limited to two safety properties inspi
 **After:** The executor now checks live-service connectivity, snapshot freshness, and permission-controller state before any UI-observation-dependent command. A detected permission dialog stops the whole step before app launch or other task action as well. Safe stops are terminal for the current task and are not retried or sent to automated recovery.
 
 **Validation:** Regression coverage for permission classification and recovery already exists; the latest CI run must confirm compilation and tests for the executor-boundary change. Physical-device validation remains NOT VERIFIED.
+
+
+### 10. UI data integrity and truthful controls
+
+**Before:** The native UI prefilled a real task with a Calculator demo command, displayed a fixed TECNO model and an unconditional "100% on-device / zero cloud" claim, and external telemetry fabricated battery, display, network, foreground-app and thermal values when readings were unavailable. Saved tasks with invalid command payloads could fall back to launching Calculator and tapping 7; several saved-task/skill execution paths silently switched to benchmark mode when Accessibility was disabled.
+
+**After:** The task field starts empty; device identity and runtime status are derived from current capabilities; external observation uses OS readings and explicit unknown/unavailable values; invalid saved tasks and skills are rejected without dispatching demo actions; and saved-task/skill paths no longer auto-switch to simulation. Observation and timeline screens now display the captured snapshot and real execution-step outcomes, and history status colors/messages reflect the stored outcome.
+
+**Validation:** Latest CI must verify compilation and tests. UI interaction testing and physical-device telemetry verification remain NOT VERIFIED.

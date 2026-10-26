@@ -46,7 +46,7 @@ data class AgentEngineState(
     val activeTimerCountdownSec: Int? = null,
     val currentThought: com.example.core.model.CognitiveThought? = null,
     val thoughtChain: List<com.example.core.model.CognitiveThought> = emptyList(),
-    val cognitiveMode: String = "100% On-Device Heuristic Brain (Zero Cloud Token)",
+    val cognitiveMode: String = "Backend not selected",
     val activeTier: Int? = null,
     val activeBackendName: String? = null,
     val intentConfidence: Float? = null

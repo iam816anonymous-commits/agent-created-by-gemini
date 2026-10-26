@@ -116,14 +116,14 @@ fun DashboardScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.SignalWifiOff,
-                        contentDescription = "Offline Mode",
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Runtime status",
                         tint = CyberCyanPrimary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "100% On-Device • Zero Cloud Calls • Airplane Ready",
+                        text = "Accessibility: ${if (capabilities.isAccessibilityEnabled) "Enabled" else "Disabled"} • Backend: ${engineState.activeBackendName ?: "Not selected"}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -281,7 +281,7 @@ fun DashboardScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, StatusFailure.copy(alpha = 0.6f))
                     ) {
                         Text(
-                            text = "KILL SWITCH ARMED",
+                            text = "EMERGENCY STOP",
                             color = StatusFailure,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
@@ -293,14 +293,14 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Full Device Control Active • Physical Abort Button:",
+                    text = "Emergency stop controls:",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Press your phone's physical VOLUME UP button TWICE in rapid succession (<650ms) from ANY screen or app to instantly halt and abort all autonomous agent actions.",
+                    text = "Double-press VOLUME UP within 650 ms while LocalAgent can receive the key event to request an emergency stop. Use Stop during a running task to stop execution from this screen.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp
@@ -324,7 +324,7 @@ fun DashboardScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            viewModel.triggerEmergencyKillSwitch("Simulated Physical Volume-Up Kill Switch Test")
+                            viewModel.triggerEmergencyKillSwitch("UI emergency stop test button pressed")
                         },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusFailure),
                         border = androidx.compose.foundation.BorderStroke(1.dp, StatusFailure.copy(alpha = 0.7f)),
