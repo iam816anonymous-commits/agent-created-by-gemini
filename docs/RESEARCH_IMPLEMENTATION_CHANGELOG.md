@@ -64,3 +64,12 @@ This first implementation is deliberately limited to two safety properties inspi
 **After:** A second task request is rejected while an execution is active; the current task must be stopped before another starts. Live observation returns `null` when the live service is unavailable rather than substituting benchmark state. Torch APIs return explicit failure when physical hardware/API support is unavailable and do not mutate physical-state telemetry.
 
 **Validation:** Added a regression test for truthful torch state. The current CI run must validate the latest commit; hardware-specific behavior remains NOT VERIFIED until tested on a physical device.
+
+
+### 8. Durable execution start and per-step attempt journal
+
+**Before:** The execution history row was written only when a task finished, so process death during planning or action execution could leave no durable execution record. Step deliberation could also reuse the previous step's pre-action observation.
+
+**After:** A `RUNNING` execution record is persisted before planning starts; each step attempt writes a durable journal entry before entering the executor; and every live step deliberates using a newly requested live observation. The agent does not automatically resume or replay a task after process death.
+
+**Limitation:** Automatic startup reconciliation of orphaned `RUNNING` records and physical process-kill tests are still outstanding. A durable journal improves evidence but does not, by itself, prove whether a system action completed.

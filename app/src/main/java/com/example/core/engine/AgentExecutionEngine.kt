@@ -176,6 +176,19 @@ class AgentExecutionEngine(
         mode: com.example.core.model.ExecutionMode,
         startTime: Long
     ) {
+        // Persist the execution before planning or dispatch so process death cannot erase all evidence of the task.
+        repository.saveExecution(
+            id = executionId,
+            prompt = prompt,
+            status = "RUNNING",
+            totalSteps = predefinedCommands?.size ?: 0,
+            successfulSteps = 0,
+            startTimestamp = startTime,
+            endTimestamp = null,
+            durationMs = 0L,
+            failureReason = null,
+            isLiveExecution = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
+        )
         repository.log("INFO", "Engine", "Starting execution '$executionId' [Mode: $mode]: $prompt", executionId)
 
         // Step 1: Normalize task via HierarchicalIntentRouter or deterministic fallback (A01, A07, A08)
@@ -312,7 +325,12 @@ class AgentExecutionEngine(
             enforcePreExecutionSafetyCheck(executionId)
 
             // On-Device Cognitive Deliberation (Observe -> Assess -> Hypothesize -> Safety -> Action)
-            val preObs = _state.value.preSnapshot ?: _state.value.latestObservation ?: captureFreshObservation()
+            // Each step deliberates against the current live screen, never the previous step's stale pre-state.
+            val preObs = if (mode == com.example.core.model.ExecutionMode.LIVE_DEVICE) {
+                captureFreshObservation()
+            } else {
+                simulatedBenchmarkState
+            }
             val deliberatedThoughts = cognitiveBrain.deliberate(
                 prompt = prompt,
                 stepIndex = index + 1,
@@ -369,6 +387,12 @@ class AgentExecutionEngine(
                     }
                 }
 
+                repository.log(
+                    "JOURNAL",
+                    "StepAttempt",
+                    "Prepared attempt ${retryCount + 1} for step ${index + 1}/${commands.size} (${command.displayName}). If the process stops before verification is persisted, treat the outcome as uncertain and re-observe the device before any retry.",
+                    executionId
+                )
                 val stepResult = withTimeoutOrNull(stepTimeoutMs) {
                     executeSingleStep(
                         command = command,
