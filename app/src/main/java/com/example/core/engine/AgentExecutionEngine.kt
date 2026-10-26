@@ -377,7 +377,11 @@ class AgentExecutionEngine(
                         retryCount++
                         delay(500)
                     }
-                } else if (stepResult.status == StepStatus.SUCCESS || retryCount >= maxRetries) {
+                } else if (
+                    stepResult.status == StepStatus.SUCCESS ||
+                    retryCount >= maxRetries ||
+                    stepResult.verificationDetails.startsWith("USER_CONSENT_REQUIRED:")
+                ) {
                     stepOutcome = stepResult
                 } else {
                     repository.log("WARN", "Engine", "Step ${index + 1} did not verify successfully (${stepResult.status}): ${stepResult.verificationDetails}. Retrying ($retryCount/$maxRetries)...", executionId)
@@ -421,6 +425,19 @@ class AgentExecutionEngine(
                     steps = executedRecords.toList(),
                     statusMessage = "Step ${index + 1} finished with status: ${finalRecord.status}"
                 )
+            }
+
+            if (finalRecord.verificationDetails.startsWith("USER_CONSENT_REQUIRED:")) {
+                val reason = finalRecord.verificationDetails.removePrefix("USER_CONSENT_REQUIRED:").trim()
+                completeExecution(
+                    executionId,
+                    ExecutionStatus.COMPLETED_FAILURE,
+                    reason,
+                    executedRecords,
+                    startTime,
+                    mode
+                )
+                return
             }
 
             if (finalRecord.status != StepStatus.SUCCESS) {
@@ -544,6 +561,23 @@ class AgentExecutionEngine(
 
                 var effectiveSnapshot = preSnapshot
                 var resolution = resolver.resolve(command.selector, effectiveSnapshot)
+
+                if (useLive && service != null) {
+                    val interruption = com.example.core.reflection.InterruptionDetector.assessSnapshot(effectiveSnapshot)
+                    if (interruption.type == com.example.core.reflection.InterruptionType.PERMISSION_DIALOG) {
+                        return StepExecutionRecord(
+                            stepIndex = stepIndex,
+                            commandSummary = command.displayName,
+                            targetSelector = command.selector.toReadableDescription(),
+                            dispatchedAction = null,
+                            preSnapshotId = effectiveSnapshot?.id,
+                            postSnapshotId = null,
+                            status = StepStatus.INCONCLUSIVE,
+                            verificationDetails = "USER_CONSENT_REQUIRED: ${interruption.description} LocalAgent stopped this step without granting, dismissing, scrolling past, or retrying the dialog.",
+                            durationMs = System.currentTimeMillis() - stepStartTime
+                        )
+                    }
+                }
 
                 // Self-Healing Strategy 1: Check for Interruption/Modal Dialog (Permissions, System alerts, Popups)
                 if (resolution !is TargetResolver.ResolutionResult.Success && useLive && service != null) {
