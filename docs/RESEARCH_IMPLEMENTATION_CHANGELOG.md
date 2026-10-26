@@ -20,16 +20,22 @@ This first implementation is deliberately limited to two safety properties inspi
 
 **After:** Permission-controller screens are classified by the window package or node package and require explicit user action. The detector returns no grant/dismiss command. The live click executor stops before dispatch, retries and automated recovery, and records a consent-required inconclusive result.
 
-### 3. Missing live observations
+### 3. Missing or stale live observations
 
-**Before:** If a live click had no current snapshot, target resolution failed but the self-healing path could still dispatch a scroll exploration gesture.
+**Before:** A missing live snapshot could fall back to simulated state; a missing/stale target could also enter the self-healing path and attempt a scroll.
 
-**After:** A missing live snapshot stops the click step before any gesture, retry or automated recovery. The outcome is explicitly inconclusive rather than pretending the target could be safely resolved.
+**After:** Live mode never substitutes simulated state when the accessibility service or snapshot is unavailable. Missing, stale (>4 seconds), or future-dated observations stop the click step before dispatch, scroll exploration, retry, or recovery. The result is explicitly inconclusive.
 
-### 4. Regression coverage
+### 4. Recovery engine
 
-- Added resolver tests for empty observations and absent semantic matches.
-- Updated the permission-interruption test to assert that no automated permission command is produced.
+**Before:** Autonomous recovery could still formulate a scroll/retry plan when a permission dialog was detected but no automatic dismiss command was available.
+
+**After:** The recovery planner returns an empty action plan with a consent-required reason for permission dialogs.
+
+### 5. Regression coverage
+
+- Updated legacy coordinate-fallback tests to assert failure without semantic target evidence.
+- Updated recovery tests to assert that permission dialogs do not generate grant, dismiss, scroll, or retry commands.
 - Added coverage for permission-controller node-package detection when the window package differs.
 
 ## Evidence and limitations
