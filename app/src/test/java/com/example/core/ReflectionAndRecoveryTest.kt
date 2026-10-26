@@ -78,10 +78,8 @@ class ReflectionAndRecoveryTest {
 
         assertTrue("Should detect interruption in permission controller", assessment.isInterrupted)
         assertEquals("Should be PERMISSION_DIALOG type", InterruptionType.PERMISSION_DIALOG, assessment.type)
-        assertNotNull("Should provide dismiss command", assessment.dismissCommand)
-
-        val dismissCmd = assessment.dismissCommand as TaskCommand.ClickElement
-        assertEquals("Target should click 'While using the app'", "While using the app", dismissCmd.selector.text)
+        assertEquals("Permission dialogs must never produce an automated grant/dismiss command", null, assessment.dismissCommand)
+        assertTrue("Permission dialog description must require user action", assessment.description.contains("explicit user action"))
     }
 
     @Test
