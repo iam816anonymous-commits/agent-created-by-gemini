@@ -32,9 +32,9 @@ data class StateSignature(
 }
 
 /**
- * Studied from Alibaba Mobile-Agent-v2 Reflection Unit:
- * Interruption Detector inspects the current UI hierarchy to identify blocking system
- * popups, permission controllers, or ANR prompts and generates corrective bypass commands.
+ * Interruption detector for blocking system UI.
+ * Permission-controller screens are deliberately classified without generating an
+ * automated grant/dismiss command; user consent must remain a human decision.
  */
 object InterruptionDetector {
 
@@ -60,10 +60,14 @@ object InterruptionDetector {
         }
 
         val pkg = snapshot.packageName.lowercase()
+        val nodePackages = snapshot.allNodes.asSequence().map { it.packageName.lowercase() }
+        val isPermissionController = PERMISSION_PACKAGES.any { permissionPackage ->
+            pkg.contains(permissionPackage) || nodePackages.any { it.contains(permissionPackage) }
+        }
 
         // 1. Android Permission Controller Interruption.
         // Never synthesize an Allow/Grant click: the user must decide on the system dialog.
-        if (PERMISSION_PACKAGES.any { pkg.contains(it) }) {
+        if (isPermissionController) {
             return InterruptionAssessment(
                 isInterrupted = true,
                 type = InterruptionType.PERMISSION_DIALOG,
