@@ -103,6 +103,29 @@ class CommandParserAndApprovalTest {
         assertTrue("Plan can execute after explicit approval", gate.canExecute(plan.planId))
     }
 
+
+    @Test
+    fun testTaskApprovalGate_consequentialPlanCannotExecuteUntilApproved() {
+        val gate = TaskApprovalGate()
+        val plan = gate.proposePlan(
+            rawTask = "Transfer money to a recipient",
+            resolvedPackage = "com.phonepe.app",
+            steps = listOf(
+                ProposedStep(
+                    stepIndex = 1,
+                    description = "Make payment",
+                    actionType = "CLICK",
+                    target = "Pay recipient"
+                )
+            )
+        )
+
+        assertTrue("Financial actions must require elevated confirmation", plan.requiresElevatedConfirmation)
+        assertFalse("Consequential plan must remain blocked before explicit approval", gate.canExecute(plan.planId))
+        assertTrue("Only explicit approval for this plan unlocks the gate", gate.approvePlan(plan.planId))
+        assertTrue("Approved plan should pass the gate", gate.canExecute(plan.planId))
+    }
+
     @Test
     fun testTaskApprovalGate_doesNotFalselyFlagShoppingAsPinCredential() {
         val gate = TaskApprovalGate()

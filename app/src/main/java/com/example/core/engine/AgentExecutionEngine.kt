@@ -112,14 +112,9 @@ class AgentExecutionEngine(
         val service = LocalAgentAccessibilityService.instance
         val isServiceConnected = service != null && LocalAgentAccessibilityService.isServiceConnected.value
 
-        // Enforce mode consistency (Issue A02)
-        val effectiveMode = when (mode) {
-            com.example.core.model.ExecutionMode.LIVE_DEVICE -> {
-                if (isServiceConnected) com.example.core.model.ExecutionMode.LIVE_DEVICE
-                else com.example.core.model.ExecutionMode.SIMULATION
-            }
-            else -> mode
-        }
+        // Never silently downgrade a requested live task to simulation.
+        // Simulation is only entered when the caller explicitly requests BENCHMARK/SIMULATION.
+        val effectiveMode = mode
 
         val executionId = UUID.randomUUID().toString()
         val startTime = System.currentTimeMillis()
@@ -245,11 +240,32 @@ class AgentExecutionEngine(
         }
         val plan = approvalGate.proposePlan(prompt, (commands.firstOrNull() as? TaskCommand.LaunchApp)?.packageName, proposedSteps)
         if (plan.requiresElevatedConfirmation) {
-            repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Elevated gate active.", executionId)
+            repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Explicit approval is required.", executionId)
+            if (!approvalGate.canExecute(plan.planId)) {
+                val highRiskSteps = plan.steps.filter {
+                    it.riskLevel == com.example.core.approval.RiskLevel.HIGH ||
+                        it.riskLevel == com.example.core.approval.RiskLevel.CRITICAL
+                }
+                val riskSummary = highRiskSteps.joinToString { "${it.stepIndex}:${it.riskLevel}" }
+                val reason = "Task blocked before dispatch: explicit user approval is required for consequential step(s) [$riskSummary]. This build has no approval action connected to the execution gate; no task actions were dispatched."
+                repository.log("SECURITY", "ApprovalGate", reason, executionId)
+                completeExecution(
+                    executionId,
+                    ExecutionStatus.COMPLETED_FAILURE,
+                    reason,
+                    emptyList(),
+                    startTime,
+                    mode
+                )
+                return
+            }
         }
 
         // Live vs Benchmark Mode Enforcement (A02, A01)
-        if (mode == com.example.core.model.ExecutionMode.LIVE_DEVICE && LocalAgentAccessibilityService.instance == null) {
+        if (
+            mode == com.example.core.model.ExecutionMode.LIVE_DEVICE &&
+            (LocalAgentAccessibilityService.instance == null || !LocalAgentAccessibilityService.isServiceConnected.value)
+        ) {
             val requiresAccessibility = commands.any {
                 it is TaskCommand.ClickElement || it is TaskCommand.EnterText ||
                 it is TaskCommand.Scroll || it is TaskCommand.OpenDrawer ||

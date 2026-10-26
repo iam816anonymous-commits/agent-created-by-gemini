@@ -45,3 +45,13 @@ This first implementation is deliberately limited to two safety properties inspi
 - A subsequent CI run is in progress; the final result must be checked before considering the branch merge-ready. The Android APK build is downstream of unit tests and has not yet been confirmed for the latest changes.
 - Physical-device permission behavior, accessibility event timing, real target dispatch and post-action state verification remain **NOT VERIFIED** until exercised on a device.
 - No changes were made to main and no pull request was merged.
+
+
+### 6. Live-mode integrity and consequential-action approval
+
+**Before:** A request for LIVE_DEVICE execution silently became SIMULATION when the accessibility service was disconnected. The risk gate classified high/critical plans and logged that the gate was active, but execution continued without checking approval.
+
+**After:** Requested execution mode is preserved. If a live task requires accessibility and the service is disconnected, execution stops instead of pretending to operate the phone. High/critical plans are blocked before task actions are dispatched unless the exact plan is approved through the existing gate.
+
+**UI constraint:** No approval action is currently wired from the existing UI to `TaskApprovalGate.approvePlan`. To honor the no-UI-change requirement, this patch fails closed and reports that approval is unavailable; sensitive tasks remain blocked until an approval path is implemented in a separately authorized UI change.
+
