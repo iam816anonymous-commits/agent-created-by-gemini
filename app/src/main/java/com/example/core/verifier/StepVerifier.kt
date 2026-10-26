@@ -448,6 +448,9 @@ class StepVerifier(
         postSnapshot: UiSnapshot
     ): VerificationOutcome {
         return when (rule) {
+            is VerificationRule.AlwaysPass -> {
+                VerificationOutcome(status = StepStatus.INCONCLUSIVE, reason = "AlwaysPass rule provides zero postcondition verification evidence", confidence = 0.0f)
+            }
             is VerificationRule.DisplayContainsText -> {
                 val foundNode = postSnapshot.allNodes.firstOrNull { node ->
                     node.text?.contains(rule.expectedText, ignoreCase = true) == true ||

@@ -97,6 +97,21 @@ class HardwareManager(private val context: Context) : SensorEventListener {
         registerSensors()
     }
 
+    fun getBatteryLevel(): Int {
+        return try {
+            val batteryStatus = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val level = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+            if (level >= 0 && scale > 0) {
+                ((level / scale.toFloat()) * 100).toInt()
+            } else {
+                -1 // Unknown / unavailable telemetry
+            }
+        } catch (_: Exception) {
+            -1 // Unknown / unavailable telemetry
+        }
+    }
+
     fun refreshHardwareStates() {
         // Wi-Fi State
         try {

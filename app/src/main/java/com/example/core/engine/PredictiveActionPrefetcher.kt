@@ -60,33 +60,30 @@ class PredictiveActionPrefetcher(
                 totalPrefetches++
                 val nextCmd = upcomingCommands[nextIndex]
 
-                // Pre-resolve target package name
-                val resolvedPackage = nextCmd.targetPackage.ifBlank {
-                    resolver.resolvePackageForLabel(nextCmd.targetLabel)
+                val targetPkg = when (nextCmd) {
+                    is TaskCommand.LaunchApp -> nextCmd.packageName
+                    else -> ""
                 }
+                val label = nextCmd.displayName
 
-                // Pre-construct explicit launcher intent
-                val preparedIntent = if (!resolvedPackage.isNullOrBlank()) {
-                    context?.packageManager?.getLaunchIntentForPackage(resolvedPackage)?.apply {
+                val preparedIntent = if (targetPkg.isNotBlank()) {
+                    context?.packageManager?.getLaunchIntentForPackage(targetPkg)?.apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     }
                 } else null
 
-                // Pre-warm selector rule
-                val selector = nextCmd.elementSelector.ifBlank {
-                    "contentDescription('${nextCmd.targetLabel}') || text('${nextCmd.targetLabel}')"
-                }
+                val selector = "label('$label')"
 
                 val payload = PrefetchedStepPayload(
                     stepIndex = nextIndex,
-                    predictedActionType = nextCmd.actionType.name,
-                    resolvedPackageName = resolvedPackage,
+                    predictedActionType = nextCmd.javaClass.simpleName,
+                    resolvedPackageName = targetPkg.ifBlank { null },
                     preparedIntent = preparedIntent,
                     expectedSelector = selector
                 )
 
                 prefetchCache[nextIndex] = payload
-                Log.d(TAG, "Prefetched Step $nextIndex speculatively: Target=$resolvedPackage (Hit potential 96%)")
+                Log.d(TAG, "Prefetched Step $nextIndex speculatively: Target=$targetPkg (Hit potential 96%)")
             } catch (e: Exception) {
                 Log.w(TAG, "Prefetch error for Step $nextIndex: ${e.message}")
             }

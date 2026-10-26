@@ -49,6 +49,7 @@ sealed interface VerificationRule {
     data class ElementExists(val selector: TargetSelector) : VerificationRule
     data class PackageMatches(val expectedPackage: String) : VerificationRule
     data class HierarchyChanged(val preActionNodeCount: Int) : VerificationRule
+    object AlwaysPass : VerificationRule
 }
 
 sealed interface TaskCommand {
@@ -228,7 +229,6 @@ data class ResearchScrapeResult(
     val provenance: String = "LIVE_WEB_FETCH",
     val cacheAgeSeconds: Long = 0L
 ) {
-    // Backwards compatibility accessor
     val movies: List<SearchHit> get() = hits
 }
 
@@ -272,7 +272,7 @@ data class DurableMemoryBackup(
     val version: Int = 1,
     val timestampMs: Long = System.currentTimeMillis(),
     val taskCount: Int = 0,
-    val deviceModel: String = "TECNO IN6",
+    val deviceModel: String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim().ifEmpty { "TECNO IN6" },
     val checksum: String = ""
 )
 
@@ -290,7 +290,7 @@ data class RecordedInteraction(
     val id: String = UUID.randomUUID().toString(),
     val timestampMs: Long = System.currentTimeMillis(),
     val actionType: ActionType,
-    val targetLabel: String,
+    val targetLabel: String = "",
     val targetSelector: TargetSelector? = null,
     val targetBounds: RectData? = null,
     val touchCoordinates: Pair<Int, Int>? = null,

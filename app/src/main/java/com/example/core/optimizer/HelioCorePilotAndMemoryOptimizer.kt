@@ -118,7 +118,7 @@ class HelioCorePilotAndMemoryOptimizer(
      * Momentarily escalates CPU priority for an atomic action dispatch (<150ms).
      * Returns to efficiency cluster immediately after execution.
      */
-    inline fun <T> withPerformanceBurst(block: () -> T): T {
+    fun <T> withPerformanceBurst(block: () -> T): T {
         val previousPriority = Process.getThreadPriority(Process.myTid())
         return try {
             Process.setThreadPriority(Process.THREAD_PRIORITY_FOREGROUND)

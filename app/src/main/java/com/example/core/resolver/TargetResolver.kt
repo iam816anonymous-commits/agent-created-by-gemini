@@ -31,6 +31,39 @@ class TargetResolver(
 
         val allNodes = snapshot.allNodes
         if (allNodes.isEmpty()) {
+            val normX = selector.fallbackNormalizedX
+            val normY = selector.fallbackNormalizedY
+            if (normX != null && normY != null && normX in 0.0f..1.0f && normY in 0.0f..1.0f) {
+                val screenW = snapshot.rootNode?.bounds?.width?.takeIf { it > 0 } ?: 1080
+                val screenH = snapshot.rootNode?.bounds?.height?.takeIf { it > 0 } ?: 2400
+                val px = (normX * screenW).toInt()
+                val py = (normY * screenH).toInt()
+                val fallbackNode = UiNode(
+                    id = "coord_fallback_${px}_${py}",
+                    packageName = snapshot.packageName,
+                    className = "android.view.View",
+                    text = selector.text,
+                    contentDescription = selector.contentDescription,
+                    resourceId = selector.resourceId,
+                    bounds = com.example.core.model.RectData(px - 15, py - 15, px + 15, py + 15),
+                    isClickable = true,
+                    isEditable = false,
+                    isEnabled = true,
+                    isFocused = false,
+                    isScrollable = false,
+                    isVisibleToUser = true,
+                    depth = 1
+                )
+                return ResolutionResult.Success(
+                    match = TargetMatch(
+                        node = fallbackNode,
+                        score = 20,
+                        matchReason = "UNVERIFIED Stage-4 Normalized Coordinate Fallback [${(normX * 100).toInt()}%, ${(normY * 100).toInt()}%]",
+                        clickCoordinates = Pair(px, py)
+                    ),
+                    candidateCount = 1
+                )
+            }
             return ResolutionResult.Failure("Snapshot contains zero accessible nodes in package '${snapshot.packageName}'")
         }
 

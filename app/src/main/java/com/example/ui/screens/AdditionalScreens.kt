@@ -38,24 +38,24 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.core.model.AgentSkill
+import com.example.core.engine.AgentEngineState
 import com.example.core.model.DeviceCapabilities
 import com.example.core.model.LiveConsoleEntry
-import com.example.core.model.StepExecutionRecord
-import com.example.core.model.SynthesizedTask
-import com.example.ui.AgentState
+import com.example.data.local.DiagnosticLogEntity
+import com.example.data.local.SkillEntity
+import com.example.data.local.SynthesizedTaskEntity
+import com.example.data.local.TaskExecutionEntity
+import com.example.ui.AgentUiState
 import com.example.ui.AgentViewModel
-import com.example.ui.EngineState
-import com.example.ui.StorageMetrics
 import com.example.ui.theme.CyberCyanPrimary
 import com.example.ui.theme.StatusSuccess
 
 @Composable
 fun RecorderScreen(
     viewModel: AgentViewModel,
-    uiState: AgentState,
-    savedTasks: List<SynthesizedTask>,
-    skills: List<AgentSkill>,
+    uiState: AgentUiState,
+    savedTasks: List<SynthesizedTaskEntity>,
+    skills: List<SkillEntity>,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -83,10 +83,10 @@ fun RecorderScreen(
                     color = Color.LightGray
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.startRecording() }) {
+                    Button(onClick = { viewModel.startVisualRecording() }) {
                         Text("Start Recording")
                     }
-                    OutlinedButton(onClick = { viewModel.stopRecording() }) {
+                    OutlinedButton(onClick = { viewModel.stopVisualRecording() }) {
                         Text("Stop")
                     }
                 }
@@ -115,8 +115,8 @@ fun RecorderScreen(
 @Composable
 fun ObservationScreen(
     viewModel: AgentViewModel,
-    uiState: AgentState,
-    engineState: EngineState,
+    uiState: AgentUiState,
+    engineState: AgentEngineState,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -143,7 +143,7 @@ fun ObservationScreen(
                     fontSize = 12.sp,
                     color = Color.LightGray
                 )
-                Button(onClick = { viewModel.captureLiveSnapshot() }) {
+                Button(onClick = { viewModel.captureFreshObservation() }) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(Modifier.size(6.dp))
                     Text("Capture Fresh Snapshot")
@@ -156,7 +156,7 @@ fun ObservationScreen(
 @Composable
 fun TimelineScreen(
     viewModel: AgentViewModel,
-    engineState: EngineState,
+    engineState: AgentEngineState,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -195,9 +195,9 @@ fun TimelineScreen(
 @Composable
 fun HistoryScreen(
     viewModel: AgentViewModel,
-    uiState: AgentState,
-    executions: List<StepExecutionRecord>,
-    logs: List<LiveConsoleEntry>,
+    uiState: AgentUiState,
+    executions: List<TaskExecutionEntity>,
+    logs: List<DiagnosticLogEntity>,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -223,10 +223,10 @@ fun HistoryScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = record.commandSummary, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = "${record.status}", color = StatusSuccess, fontSize = 11.sp)
+                        Text(text = record.prompt, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(text = record.status, color = StatusSuccess, fontSize = 11.sp)
                     }
-                    Text(text = record.verificationDetails, fontSize = 11.sp, color = Color.Gray)
+                    Text(text = record.failureReason ?: "Success (${record.successfulSteps}/${record.totalSteps} steps)", fontSize = 11.sp, color = Color.Gray)
                 }
             }
         }
@@ -236,9 +236,9 @@ fun HistoryScreen(
 @Composable
 fun DeviceScreen(
     viewModel: AgentViewModel,
-    uiState: AgentState,
+    uiState: AgentUiState,
     capabilities: DeviceCapabilities?,
-    storageMetrics: StorageMetrics?,
+    storageMetrics: Pair<Long, Long>?,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -282,8 +282,8 @@ fun DeviceScreen(
                         color = CyberCyanPrimary,
                         fontFamily = FontFamily.Monospace
                     )
-                    Text("Database Records: ${st.databaseRecordsCount}", color = Color.White, fontSize = 12.sp)
-                    Text("Storage Size: ${st.databaseSizeBytes} bytes", color = Color.LightGray, fontSize = 12.sp)
+                    Text("Total Storage: ${st.first / (1024 * 1024)} MB", color = Color.White, fontSize = 12.sp)
+                    Text("Available Storage: ${st.second / (1024 * 1024)} MB", color = Color.LightGray, fontSize = 12.sp)
                 }
             }
         }

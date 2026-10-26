@@ -457,7 +457,7 @@ class RemoteAgentBridge(
             else -> FlashlightTarget.BACK
         }
 
-        val success = hardwareManager.setFlashlight(flashTarget, enable, duration)
+        val success = hardwareManager.setTorch(enable, flashTarget).isSuccess
         _telemetry.value = _telemetry.value.copy(
             totalDirectivesProcessed = _telemetry.value.totalDirectivesProcessed + 1,
             lastRemoteCommand = "FLASHLIGHT $target $enable (${duration}s)",
@@ -478,10 +478,10 @@ class RemoteAgentBridge(
         val service = LocalAgentAccessibilityService.instance
 
         val success = when (action) {
-            "BACK" -> service?.dispatchGlobalBack() ?: false
-            "HOME" -> service?.dispatchGlobalHome() ?: false
-            "RECENTS" -> service?.dispatchGlobalRecents() ?: false
-            "NOTIFICATIONS" -> service?.dispatchGlobalNotifications() ?: false
+            "BACK" -> service?.dispatchBack() ?: false
+            "HOME" -> service?.dispatchHome() ?: false
+            "RECENTS" -> service?.dispatchRecents() ?: false
+            "NOTIFICATIONS" -> service?.dispatchNotifications() ?: false
             else -> false
         }
 

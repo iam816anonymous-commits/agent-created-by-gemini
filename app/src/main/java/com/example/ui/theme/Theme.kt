@@ -18,6 +18,7 @@ val StatusSuccess = Color(0xFF10B981)
 val StatusRunning = Color(0xFF06B6D4)
 val StatusFailure = Color(0xFFEF4444)
 val StatusWarning = Color(0xFFF59E0B)
+val StatusTimeout = Color(0xFF8B5CF6)
 
 private val DarkColorScheme = darkColorScheme(
     primary = CyberCyanPrimary,
