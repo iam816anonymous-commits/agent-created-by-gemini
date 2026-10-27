@@ -30,6 +30,7 @@ export type HardwareOperationStatus =
   | 'SUCCESS_VERIFIED'
   | 'COMMAND_ACCEPTED_UNVERIFIED'
   | 'UNSUPPORTED'
+  | 'UNAVAILABLE'
   | 'PERMISSION_REQUIRED'
   | 'PERMISSION_DENIED'
   | 'INVALID_PARAMETERS'
@@ -198,4 +199,124 @@ export interface EmergencyStopReport {
   readonly reason?: string;
   readonly actuatorsSilenced?: string[];
   readonly operationsCancelled?: string[];
+}
+
+// ==========================================
+// GOOGLE ML KIT ON-DEVICE SENSORY PERCEPTION TYPES
+// ==========================================
+
+export interface RectBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+export interface MLKitTextElement {
+  readonly text: string;
+  readonly boundingBox?: RectBounds | null;
+  readonly confidence?: number | null;
+}
+
+export interface MLKitTextLine {
+  readonly text: string;
+  readonly boundingBox?: RectBounds | null;
+  readonly confidence?: number | null;
+  readonly elements?: MLKitTextElement[];
+  readonly recognizedLanguage?: string | null;
+}
+
+export interface MLKitTextBlock {
+  readonly text: string;
+  readonly boundingBox?: RectBounds | null;
+  readonly lines?: MLKitTextLine[];
+  readonly recognizedLanguages?: string[];
+}
+
+export interface MLKitTextPayload {
+  readonly text: string;
+  readonly blocks: MLKitTextBlock[];
+  readonly timestampMs?: number;
+  readonly frameWidth?: number | null;
+  readonly frameHeight?: number | null;
+}
+
+export interface MLKitBarcodeItem {
+  readonly rawValue: string;
+  readonly displayValue?: string | null;
+  readonly format: string;
+  readonly valueType?: string | null;
+  readonly boundingBox?: RectBounds | null;
+}
+
+export interface MLKitBarcodePayload {
+  readonly barcodes: MLKitBarcodeItem[];
+  readonly timestampMs?: number;
+  readonly frameWidth?: number | null;
+  readonly frameHeight?: number | null;
+}
+
+export interface MLKitDetectedObject {
+  readonly trackingId?: number | null;
+  readonly boundingBox: RectBounds;
+  readonly labels: Array<{
+    readonly text: string;
+    readonly confidence?: number | null;
+    readonly index?: number | null;
+  }>;
+}
+
+export interface MLKitObjectPayload {
+  readonly objects: MLKitDetectedObject[];
+  readonly timestampMs?: number;
+  readonly frameWidth?: number | null;
+  readonly frameHeight?: number | null;
+}
+
+export interface MLKitPerceptionBundle {
+  readonly captureTimestampMs: number;
+  readonly sourceApi?: string;
+  readonly frameWidth?: number | null;
+  readonly frameHeight?: number | null;
+  readonly cameraFacing?: 'environment' | 'user' | 'unknown';
+  readonly textRecognition?: MLKitTextPayload | null;
+  readonly barcodeScanning?: MLKitBarcodePayload | null;
+  readonly objectDetection?: MLKitObjectPayload | null;
+  readonly latencyMs?: number | null;
+  readonly isSimulated?: boolean;
+}
+
+export interface StandardizedPerceptionBlock {
+  readonly id: string;
+  readonly modality: 'OCR_TEXT' | 'BARCODE' | 'OBJECT_DETECTION';
+  readonly authoritativeTextBlock: string;
+  readonly provenance: Provenance;
+  readonly confidence: number | null;
+  readonly boundingBox: RectBounds | null;
+  readonly timestamp: number;
+  readonly metadata: Record<string, any>;
+}
+
+export interface StandardizedPerceptionContext {
+  readonly contextId: string;
+  readonly generatedAtMs: number;
+  readonly sourceApi: string;
+  readonly frameDimensions: { readonly width: number | null; readonly height: number | null };
+  readonly blocks: StandardizedPerceptionBlock[];
+  readonly authoritativeContextString: string;
+  readonly totalEntitiesDetected: number;
+  readonly primaryModality: string;
+  readonly provenance: Provenance;
+}
+
+export interface PerceptionLoopResult {
+  readonly executionId: string;
+  readonly goal: string;
+  readonly perceptionContextId: string;
+  readonly promptInjectedBlock: string;
+  readonly actionPlanned: string;
+  readonly hardwareOperationResult?: HardwareOperationResult | null;
+  readonly verifiedOutcome: 'VERIFIED_SUCCESS' | 'BLOCKED_BY_SAFETY' | 'HARDWARE_REJECTED' | 'DIVERGENCE_RECOVERED' | 'UNSUPPORTED_ON_HOST';
+  readonly durationMs: number;
+  readonly timestamp: number;
 }

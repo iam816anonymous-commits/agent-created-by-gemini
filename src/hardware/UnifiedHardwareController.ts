@@ -21,8 +21,11 @@ import {
   EmergencyStopReport,
   OpticalWaveFormat,
   Provenance,
-  DeviceAdaptiveRecommendation
+  DeviceAdaptiveRecommendation,
+  MLKitPerceptionBundle,
+  StandardizedPerceptionContext
 } from './types';
+import { mlKitPerceptionBridge } from './MLKitPerceptionBridge';
 
 export class UnifiedHardwareController {
   private static instance: UnifiedHardwareController | null = null;
@@ -54,6 +57,10 @@ export class UnifiedHardwareController {
 
   // Emergency Stop Flag
   private emergencyStopActive = false;
+
+  // On-Device Sensory Perception State (Google ML Kit)
+  private latestPerceptionContext: StandardizedPerceptionContext | null = null;
+  private perceptionContextListeners = new Set<(ctx: StandardizedPerceptionContext) => void>();
 
   // Diagnostic Event Observers
   private registryChangeListeners = new Set<(reg: DiscoveredHardwareRegistry) => void>();
@@ -882,6 +889,7 @@ export class UnifiedHardwareController {
       action.startsWith('AUDIO') ? 'actuator-audio' :
       action.startsWith('WIFI') || action.startsWith('SET_ENABLED') ? 'actuator-wifi' :
       action.startsWith('BLUETOOTH') ? 'actuator-bluetooth' :
+      action.startsWith('PERCEPTION') || action.startsWith('VISION') || action.startsWith('CAPTURE') ? 'actuator-camera' :
       'actuator-unknown'
     );
 
@@ -892,6 +900,7 @@ export class UnifiedHardwareController {
     if (actuatorId === 'audio_tone' || actuatorId === 'audio') actuatorId = 'actuator-audio';
     if (actuatorId === 'network_wifi' || actuatorId === 'wifi') actuatorId = 'actuator-wifi';
     if (actuatorId === 'bluetooth_adapter' || actuatorId === 'bluetooth') actuatorId = 'actuator-bluetooth';
+    if (actuatorId === 'camera' || actuatorId === 'perception' || actuatorId === 'vision') actuatorId = 'actuator-camera';
 
     // Emergency stop barrier
     if (this.emergencyStopActive) {
@@ -941,6 +950,8 @@ export class UnifiedHardwareController {
         result = this.dispatchAudioAction(opId, action, actuatorId, rawParams);
       } else if (actuatorId.includes('wifi') || actuatorId.includes('bluetooth') || action.startsWith('WIFI') || action.startsWith('BLUETOOTH')) {
         result = this.dispatchNetworkAction(opId, action, actuatorId);
+      } else if (actuatorId.includes('camera') || action.startsWith('PERCEPTION') || action.startsWith('VISION') || action.startsWith('CAPTURE')) {
+        result = await this.dispatchPerceptionCaptureAction(opId, action, actuatorId, rawParams);
       } else {
         result = {
           operationId: opId,
@@ -1215,6 +1226,65 @@ export class UnifiedHardwareController {
     };
   }
 
+  // --- Google ML Kit Sensory Perception Dispatch ---
+  private async dispatchPerceptionCaptureAction(
+    opId: string,
+    action: string,
+    actuatorId: string,
+    parameters: Record<string, any>
+  ): Promise<HardwareOperationResult> {
+    const now = Date.now();
+
+    if (parameters.perceptionBundle) {
+      const context = this.ingestPerceptionBundle(parameters.perceptionBundle);
+      return {
+        operationId: opId,
+        action,
+        actuatorId,
+        status: 'SUCCESS_VERIFIED',
+        timestamp: now,
+        message: `Ingested Google ML Kit sensory frame: ${context.totalEntitiesDetected} entities parsed with provenance ${context.provenance}.`,
+        verifiedPhysicalState: true,
+        provenance: context.provenance,
+        details: {
+          contextId: context.contextId,
+          entitiesCount: context.totalEntitiesDetected,
+          modality: context.primaryModality,
+          authoritativeContextString: context.authoritativeContextString
+        }
+      };
+    }
+
+    if (this.latestPerceptionContext) {
+      return {
+        operationId: opId,
+        action,
+        actuatorId,
+        status: 'SUCCESS_VERIFIED',
+        timestamp: now,
+        message: `Active ML Kit perception frame returned (${this.latestPerceptionContext.totalEntitiesDetected} entities).`,
+        verifiedPhysicalState: true,
+        provenance: this.latestPerceptionContext.provenance,
+        details: {
+          contextId: this.latestPerceptionContext.contextId,
+          entitiesCount: this.latestPerceptionContext.totalEntitiesDetected,
+          authoritativeContextString: this.latestPerceptionContext.authoritativeContextString
+        }
+      };
+    }
+
+    return {
+      operationId: opId,
+      action,
+      actuatorId,
+      status: 'UNAVAILABLE',
+      timestamp: now,
+      message: 'No live sensory perception frame currently buffered from Google ML Kit.',
+      verifiedPhysicalState: false,
+      provenance: 'UNAVAILABLE'
+    };
+  }
+
   // --- Optical Waving Engine ---
   private startWaveModulation(format: OpticalWaveFormat, speedMultiplier: number) {
     this.stopWaveAnimation();
@@ -1398,10 +1468,31 @@ export class UnifiedHardwareController {
     this.registryChangeListeners.clear();
     this.actuatorStateListeners.clear();
     this.diagnosticLogListeners.clear();
+    this.perceptionContextListeners.clear();
   }
 
   // =========================================================================
-  // 6. OBSERVER REGISTRATION
+  // 6. ON-DEVICE SENSORY PERCEPTION (GOOGLE ML KIT)
+  // =========================================================================
+
+  public ingestPerceptionBundle(bundle: MLKitPerceptionBundle): StandardizedPerceptionContext {
+    const context = mlKitPerceptionBridge.processBundle(bundle);
+    this.latestPerceptionContext = context;
+    this.perceptionContextListeners.forEach(listener => listener(context));
+    return context;
+  }
+
+  public getLatestPerceptionContext(): StandardizedPerceptionContext | null {
+    return this.latestPerceptionContext;
+  }
+
+  public onPerceptionContextChange(listener: (ctx: StandardizedPerceptionContext) => void): () => void {
+    this.perceptionContextListeners.add(listener);
+    return () => this.perceptionContextListeners.delete(listener);
+  }
+
+  // =========================================================================
+  // 7. OBSERVER REGISTRATION
   // =========================================================================
 
   public onRegistryChange(listener: (reg: DiscoveredHardwareRegistry) => void): () => void {
