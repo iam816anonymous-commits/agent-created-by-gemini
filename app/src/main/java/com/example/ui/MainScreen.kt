@@ -114,7 +114,7 @@ fun MainScreen(viewModel: AgentViewModel) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "TECNO IN6",
+                            text = "${capabilities.manufacturer} ${capabilities.model}".trim().ifBlank { "Unknown device" },
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             color = CyberCyanPrimary,

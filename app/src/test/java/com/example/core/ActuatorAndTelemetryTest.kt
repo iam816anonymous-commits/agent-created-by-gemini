@@ -91,17 +91,17 @@ class ActuatorAndTelemetryTest {
             isLive = true
         )
 
-        // 1. Valid normalized coordinates
+        // 1. Even valid normalized coordinates cannot prove a target exists.
         val validSelector = TargetSelector(
             text = "Target",
             fallbackNormalizedX = 0.5f,
             fallbackNormalizedY = 0.25f
         )
         val validResult = targetResolver.resolve(validSelector, emptySnapshot)
-        assertTrue("Valid normalized coordinates should succeed via Stage-4 fallback", validResult is TargetResolver.ResolutionResult.Success)
-        val match = (validResult as TargetResolver.ResolutionResult.Success).match
-        assertTrue("Match reason must indicate UNVERIFIED fallback", match.matchReason.contains("UNVERIFIED Stage-4"))
-        assertEquals("Score for coordinate fallback must be 20", 20, match.score)
+        assertTrue(
+            "Coordinate-only fallback must fail when no accessible target evidence exists",
+            validResult is TargetResolver.ResolutionResult.Failure
+        )
 
         // 2. Invalid out-of-bounds normalized coordinates
         val invalidSelector = TargetSelector(
@@ -160,6 +160,36 @@ class ActuatorAndTelemetryTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun testTorchActuationNeverReportsSimulatedPhysicalSuccess() {
+        val result = actuatorController.setTorch(true)
+
+        assertTrue("Actuator result must explain the physical outcome", result.message.isNotBlank())
+        assertTrue(
+            "Unavailable hardware must not be represented as simulated success",
+            !result.message.contains("simulated", ignoreCase = true)
+        )
+        if (result.isSuccess) {
+            assertTrue("Reported success must be reflected in actuator state", actuatorController.isTorchOn.value)
+        } else {
+            assertEquals("Failed physical actuation must not mutate torch state", false, actuatorController.isTorchOn.value)
+        }
+        actuatorController.resetAllActuators()
+    }
+
+    @Test
+    fun testExternalObservationDefaultsUseUnknownRatherThanFabricatedTelemetry() {
+        val observation = com.example.core.model.ExternalObservationData()
+
+        assertEquals("Unknown", observation.foregroundPackage)
+        assertEquals("Unknown", observation.windowTitle)
+        assertEquals("Unknown", observation.displayMetrics)
+        assertEquals(-1, observation.batteryPct)
+        assertEquals("Unknown", observation.networkMode)
+        assertEquals(-1L, observation.memoryUsageMb)
+        assertEquals("Unknown", observation.thermalState)
     }
 
     @Test

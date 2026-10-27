@@ -55,14 +55,15 @@ enum class ObservationSubTab(val label: String) {
 }
 
 data class AgentUiState(
-    val taskInput: String = "Launch Calculator and tap 7",
+    val taskInput: String = "",
+    val actionFeedback: String? = null,
     val selectedTab: AgentTab = AgentTab.DASHBOARD,
     val selectedExecutionId: String? = null,
     val inspectionFilterText: String = "",
     val inspectionClickableOnly: Boolean = false,
     val selectedNodeForDetail: UiNode? = null,
     val logFilterLevel: String = "ALL",
-    val targetCalculatorPackage: String = "com.google.android.calculator",
+    val targetCalculatorPackage: String = "",
     val stepTimeoutSec: Float = 6.0f,
     val maxRetries: Int = 2,
     val stabilizationDelayMs: Long = 800L,
@@ -219,7 +220,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "System",
-                message = "LocalAgent runtime active on TECNO IN6 profile (100% On-Device)",
+                message = "LocalAgent runtime initialized. Live device control depends on enabled system capabilities.",
                 level = com.example.core.model.ConsoleLogLevel.INFO
             )
         )
@@ -230,10 +231,15 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshCapabilities() {
         _deviceCapabilities.value = capabilityDetector.detectCapabilities()
         _storageMetrics.value = capabilityDetector.getStorageMetrics()
+        hardwareManager.refreshHardwareStates()
+    }
+
+    private fun publishActionFeedback(message: String) {
+        _uiState.update { it.copy(actionFeedback = message) }
     }
 
     fun setTaskInput(prompt: String) {
-        _uiState.update { it.copy(taskInput = prompt) }
+        _uiState.update { it.copy(taskInput = prompt, actionFeedback = null) }
     }
 
     fun setSelectedTab(tab: AgentTab) {
@@ -287,26 +293,39 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     fun startVisualRecording() {
         _synthesizedTaskPreview.value = null
         visualRecorder.startRecording()
+        publishActionFeedback("Recording started. Interactions will be collected by the accessibility recorder.")
     }
 
     fun stopVisualRecording() {
         val events = visualRecorder.stopRecording()
         if (events.isNotEmpty()) {
             synthesizeRecordedFlow(events)
+        } else {
+            publishActionFeedback("Recording stopped, but no interactions were captured. Check that Accessibility is enabled and the recorder received events.")
         }
     }
 
     fun clearRecording() {
         visualRecorder.clear()
         _synthesizedTaskPreview.value = null
+        publishActionFeedback("Recorded interactions and the synthesized preview were cleared.")
     }
 
     fun synthesizeRecordedFlow(events: List<RecordedInteraction> = visualRecorder.recordedEvents.value) {
+        if (events.isEmpty()) {
+            _synthesizedTaskPreview.value = null
+            publishActionFeedback("Cannot synthesize a skill because no interactions were recorded.")
+            return
+        }
         val task = taskSynthesizer.synthesize(
             interactions = events,
             taskName = _uiState.value.recordingTaskName.ifBlank { "Recorded Flow" }
         )
         _synthesizedTaskPreview.value = task
+        publishActionFeedback(
+            if (task.commands.isEmpty()) "Recorded interactions did not produce executable commands."
+            else "Preview created: ${task.commands.size} executable command(s). Review before saving or running."
+        )
     }
 
     fun recordManualTap(node: UiNode?, label: String) {
@@ -326,27 +345,52 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveAndExecuteSynthesizedTask(task: SynthesizedTask) {
+        if (task.commands.isEmpty()) {
+            val message = "Cannot save or execute '${task.name}': the recording did not produce executable commands."
+            publishActionFeedback(message)
+            addLiveConsoleEntry(
+                com.example.core.model.LiveConsoleEntry(
+                    tag = "Recorder",
+                    message = message,
+                    level = com.example.core.model.ConsoleLogLevel.WARNING
+                )
+            )
+            return
+        }
         viewModelScope.launch {
             repository.saveSynthesizedTask(task)
             engine.startCustomTask(
                 commands = task.commands,
                 prompt = task.name,
-                runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled
+                runAsBenchmark = false
             )
             _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
         }
     }
 
     fun saveSynthesizedTask() {
-        val preview = _synthesizedTaskPreview.value ?: return
+        val preview = _synthesizedTaskPreview.value
+        if (preview == null) {
+            publishActionFeedback("There is no synthesized preview to save.")
+            return
+        }
+        if (preview.commands.isEmpty()) {
+            publishActionFeedback("Cannot save this preview because it has no executable commands.")
+            return
+        }
         viewModelScope.launch {
             repository.saveSynthesizedTask(preview)
             _synthesizedTaskPreview.value = null
+            publishActionFeedback("Saved skill '${preview.name}'.")
         }
     }
 
     fun executeSynthesizedPreview() {
-        val preview = _synthesizedTaskPreview.value ?: return
+        val preview = _synthesizedTaskPreview.value
+        if (preview == null) {
+            publishActionFeedback("There is no synthesized preview to execute.")
+            return
+        }
         saveAndExecuteSynthesizedTask(preview)
     }
 
@@ -361,21 +405,24 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             emptyList()
         }
 
-        val commands = if (decoded.isNotEmpty()) {
-            decoded
-        } else {
-            val parsed = parser.parse(taskEntity.name)
-            if (parsed.isNotEmpty()) parsed else listOf(
-                TaskCommand.LaunchApp(packageName = "com.google.android.calculator", appName = "Calculator"),
-                TaskCommand.ClickElement(selector = TargetSelector(text = "7"), targetLabel = "Button 7"),
-                TaskCommand.VerifyCondition(rule = VerificationRule.DisplayContainsText("7"), requirementDescription = "Display contains '7'")
+        val commands = decoded.ifEmpty { parser.parse(taskEntity.name) }
+        if (commands.isEmpty()) {
+            val message = "Saved task '${taskEntity.name}' has no valid command payload and its name is not parseable. Nothing was executed."
+            publishActionFeedback(message)
+            addLiveConsoleEntry(
+                com.example.core.model.LiveConsoleEntry(
+                    tag = "Recorder",
+                    message = message,
+                    level = com.example.core.model.ConsoleLogLevel.WARNING
+                )
             )
+            return
         }
 
         engine.startCustomTask(
             commands = commands,
             prompt = taskEntity.name,
-            runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled
+            runAsBenchmark = false
         )
         _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
     }
@@ -439,7 +486,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 storagePassed = sPassed,
                 storageLatencyMs = sLatency,
                 allPassed = allPassed,
-                summary = if (allPassed) "All 5 offline modules verified! LocalAgent runs 100% on-device with zero cloud telemetry." else "One or more offline checks encountered an issue."
+                summary = if (allPassed) "All 5 offline self-check modules passed. These checks validate local components only; they do not prove device-wide offline operation or physical UI execution." else "One or more offline checks encountered an issue."
             )
         }
     }
@@ -452,7 +499,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     // Execution Controls
     fun startTask(runAsBenchmark: Boolean = false) {
-        val prompt = _uiState.value.taskInput
+        val prompt = _uiState.value.taskInput.trim()
+        if (prompt.isBlank()) {
+            publishActionFeedback("Enter a task or choose a preset before starting execution.")
+            return
+        }
+        publishActionFeedback(if (runAsBenchmark) "Starting explicit benchmark run." else "Starting live-device task.")
         if (prompt.isNotBlank()) {
             val matchingSkill = allSkills.value.firstOrNull { skillEntity ->
                 val triggers = skillEntity.triggerPhrases.split(",").map { it.trim().lowercase() }
@@ -465,7 +517,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                     engine.startCustomTask(
                         commands = decoded,
                         prompt = "${matchingSkill.name}: $prompt",
-                        runAsBenchmark = runAsBenchmark || !deviceCapabilities.value.isAccessibilityEnabled
+                        runAsBenchmark = runAsBenchmark
                     )
                     _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
                     return
@@ -503,14 +555,14 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                     engine.startCustomTask(
                         commands = decoded,
                         prompt = "${matchingSkill.name}: $prompt",
-                        runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled
+                        runAsBenchmark = false
                     )
                     _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
                     return
                 }
             }
 
-            engine.startTask(prompt, runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled)
+            engine.startTask(prompt, runAsBenchmark = false)
             _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
         }
     }
@@ -523,7 +575,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startRemoteServer(port: Int = com.example.core.remote.RemoteAgentBridge.DEFAULT_PORT, token: String = "JARVIS-SECURE-9942") {
+    fun startRemoteServer(port: Int = com.example.core.remote.RemoteAgentBridge.DEFAULT_PORT, token: String? = null) {
         remoteAgentBridge.startServer(port, token)
     }
 
@@ -537,10 +589,22 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             parser.parse(skillEntity.name)
         }
+        if (decoded.isEmpty()) {
+            val message = "Skill '${skillEntity.name}' has no executable commands. Nothing was executed."
+            publishActionFeedback(message)
+            addLiveConsoleEntry(
+                com.example.core.model.LiveConsoleEntry(
+                    tag = "Skills",
+                    message = message,
+                    level = com.example.core.model.ConsoleLogLevel.WARNING
+                )
+            )
+            return
+        }
         engine.startCustomTask(
             commands = decoded,
             prompt = skillEntity.name,
-            runAsBenchmark = !deviceCapabilities.value.isAccessibilityEnabled
+            runAsBenchmark = false
         )
         _uiState.update { it.copy(selectedTab = AgentTab.TIMELINE) }
     }
@@ -652,7 +716,11 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun captureFreshObservation() {
-        engine.captureFreshObservation()
+        val snapshot = engine.captureFreshObservation()
+        publishActionFeedback(
+            if (snapshot == null) "No live observation is available. Check that the Accessibility service is enabled and the target app is visible."
+            else "Captured ${snapshot.totalNodeCount} node(s) from ${snapshot.packageName} (${if (snapshot.isLive) "live" else "diagnostic"} snapshot)."
+        )
         _uiState.update { it.copy(selectedTab = AgentTab.OBSERVATION) }
     }
 
@@ -737,6 +805,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     // Actuator Controls
     fun triggerHapticPulse(durationMs: Long = 150L) {
         val res = actuatorController.vibrateHaptic(durationMs)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -748,6 +817,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerHapticBurst() {
         val res = actuatorController.vibratePattern()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -759,6 +829,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleFlashlight() {
         val res = actuatorController.toggleTorch()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -770,6 +841,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerAudioTone() {
         val res = actuatorController.playTone()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -781,6 +853,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setActuatorVolume(percent: Int) {
         val res = actuatorController.setVolume(android.media.AudioManager.STREAM_MUSIC, percent)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -792,6 +865,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun launchHardwareSetting(action: String) {
         val res = actuatorController.openSystemSetting(action)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "Actuator",
@@ -803,6 +877,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleWifi() {
         val res = hardwareManager.toggleWifi()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -814,6 +889,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setWifi(enabled: Boolean) {
         val res = hardwareManager.setWifiEnabled(enabled)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -825,6 +901,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleBluetooth() {
         val res = hardwareManager.toggleBluetooth()
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -836,6 +913,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBluetooth(enabled: Boolean) {
         val res = hardwareManager.setBluetoothEnabled(enabled)
+        publishActionFeedback(res.message)
         addLiveConsoleEntry(
             com.example.core.model.LiveConsoleEntry(
                 tag = "HardwareManager",
@@ -924,33 +1002,93 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshExternalObservation() {
         val app = getApplication<Application>()
-        val batteryIntent = app.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: 85
-        val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: 100
-        val batteryPct = if (level >= 0 && scale > 0) (level * 100) / scale else 85
+        val batteryIntent = try {
+            app.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        } catch (_: Exception) {
+            null
+        }
+        val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPct = if (level >= 0 && scale > 0) (level * 100) / scale else -1
         val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
 
-        val displayMetrics = app.resources.displayMetrics
-        val density = displayMetrics.densityDpi
-        val w = displayMetrics.widthPixels
-        val h = if (displayMetrics.heightPixels > 0) displayMetrics.heightPixels else 2400
+        val metrics = app.resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val refreshRate = try {
+            @Suppress("DEPRECATION")
+            (app.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager)
+                ?.defaultDisplay?.refreshRate
+        } catch (_: Exception) {
+            null
+        }
+        val displayDescription = if (width > 0 && height > 0) {
+            buildString {
+                append("${width}x${height} @ ${metrics.densityDpi}dpi")
+                refreshRate?.takeIf { it > 0f }?.let { append(" (${it.toInt()}Hz)") }
+            }
+        } else {
+            "Unknown"
+        }
 
-        val activePkg = LocalAgentAccessibilityService.lastEventPackage.value.ifBlank { "com.example" }
+        val activePackage = LocalAgentAccessibilityService.lastEventPackage.value
+            .takeIf { it.isNotBlank() } ?: "Unknown"
+        val actualWindowTitle = engine.state.value.latestObservation?.windowTitle
+            ?.takeIf { it.isNotBlank() } ?: "Unknown"
 
-        val rt = Runtime.getRuntime()
-        val usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+        val networkDescription = try {
+            val connectivity = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val activeNetwork = connectivity?.activeNetwork
+            val networkCapabilities = if (connectivity != null && activeNetwork != null) connectivity.getNetworkCapabilities(activeNetwork) else null
+            when {
+                networkCapabilities == null -> "Disconnected or unavailable"
+                !networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
+                    "Connected without internet capability"
+                networkCapabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+                networkCapabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
+                networkCapabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+                networkCapabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+                else -> "Connected (transport unknown)"
+            }
+        } catch (_: Exception) {
+            "Unavailable"
+        }
+
+        val thermalDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val powerManager = app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                when (powerManager?.currentThermalStatus) {
+                    android.os.PowerManager.THERMAL_STATUS_NONE -> "None"
+                    android.os.PowerManager.THERMAL_STATUS_LIGHT -> "Light"
+                    android.os.PowerManager.THERMAL_STATUS_MODERATE -> "Moderate"
+                    android.os.PowerManager.THERMAL_STATUS_SEVERE -> "Severe"
+                    android.os.PowerManager.THERMAL_STATUS_CRITICAL -> "Critical"
+                    android.os.PowerManager.THERMAL_STATUS_EMERGENCY -> "Emergency"
+                    android.os.PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown"
+                    else -> "Unknown"
+                }
+            } catch (_: Exception) {
+                "Unavailable"
+            }
+        } else {
+            "Unavailable on Android API ${Build.VERSION.SDK_INT}"
+        }
+
+        val runtime = Runtime.getRuntime()
+        val usedHeapMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
 
         _externalObservation.value = com.example.core.model.ExternalObservationData(
             timestampMs = System.currentTimeMillis(),
-            foregroundPackage = activePkg,
-            windowTitle = if (activePkg.contains("calculator")) "Calculator Active" else "LocalAgent Active Surface",
-            displayMetrics = "${w}x${h} @ ${density}dpi (60Hz)",
+            foregroundPackage = activePackage,
+            windowTitle = actualWindowTitle,
+            displayMetrics = displayDescription,
             batteryPct = batteryPct,
             isCharging = isCharging,
-            networkMode = "Zero Cloud Telemetry / Airplane Mode Ready",
-            memoryUsageMb = usedMb,
-            thermalState = "Nominal (Safe Execution)"
+            networkMode = networkDescription,
+            memoryUsageMb = usedHeapMb,
+            thermalState = thermalDescription
         )
     }
 }

@@ -46,7 +46,7 @@ data class AgentEngineState(
     val activeTimerCountdownSec: Int? = null,
     val currentThought: com.example.core.model.CognitiveThought? = null,
     val thoughtChain: List<com.example.core.model.CognitiveThought> = emptyList(),
-    val cognitiveMode: String = "100% On-Device Heuristic Brain (Zero Cloud Token)",
+    val cognitiveMode: String = "Backend not selected",
     val activeTier: Int? = null,
     val activeBackendName: String? = null,
     val intentConfidence: Float? = null
@@ -100,26 +100,28 @@ class AgentExecutionEngine(
     var maxRetries: Int = 2
     var stabilizationDelayMs: Long = 800L
 
+    @Synchronized
     fun startTask(
         prompt: String,
         mode: com.example.core.model.ExecutionMode = com.example.core.model.ExecutionMode.LIVE_DEVICE,
         predefinedCommands: List<TaskCommand>? = null
     ) {
         if (executionJob?.isActive == true) {
-            executionJob?.cancel()
-        }
-
-        val service = LocalAgentAccessibilityService.instance
-        val isServiceConnected = service != null && LocalAgentAccessibilityService.isServiceConnected.value
-
-        // Enforce mode consistency (Issue A02)
-        val effectiveMode = when (mode) {
-            com.example.core.model.ExecutionMode.LIVE_DEVICE -> {
-                if (isServiceConnected) com.example.core.model.ExecutionMode.LIVE_DEVICE
-                else com.example.core.model.ExecutionMode.SIMULATION
+            val activeExecutionId = _state.value.executionId
+            engineScope.launch {
+                repository.log(
+                    "WARN",
+                    "Engine",
+                    "Rejected a new task while execution '${activeExecutionId ?: "unknown"}' is active. Stop or cancel the active task before starting another.",
+                    activeExecutionId
+                )
             }
-            else -> mode
+            return
         }
+
+        // Never silently downgrade a requested live task to simulation.
+        // Simulation is only entered when the caller explicitly requests BENCHMARK/SIMULATION.
+        val effectiveMode = mode
 
         val executionId = UUID.randomUUID().toString()
         val startTime = System.currentTimeMillis()
@@ -174,6 +176,19 @@ class AgentExecutionEngine(
         mode: com.example.core.model.ExecutionMode,
         startTime: Long
     ) {
+        // Persist the execution before planning or dispatch so process death cannot erase all evidence of the task.
+        repository.saveExecution(
+            id = executionId,
+            prompt = prompt,
+            status = "RUNNING",
+            totalSteps = predefinedCommands?.size ?: 0,
+            successfulSteps = 0,
+            startTimestamp = startTime,
+            endTimestamp = null,
+            durationMs = 0L,
+            failureReason = null,
+            isLiveExecution = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
+        )
         repository.log("INFO", "Engine", "Starting execution '$executionId' [Mode: $mode]: $prompt", executionId)
 
         // Step 1: Normalize task via HierarchicalIntentRouter or deterministic fallback (A01, A07, A08)
@@ -245,11 +260,32 @@ class AgentExecutionEngine(
         }
         val plan = approvalGate.proposePlan(prompt, (commands.firstOrNull() as? TaskCommand.LaunchApp)?.packageName, proposedSteps)
         if (plan.requiresElevatedConfirmation) {
-            repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Elevated gate active.", executionId)
+            repository.log("SECURITY", "ApprovalGate", "Consequential risk detected in plan '${plan.planId}'. Explicit approval is required.", executionId)
+            if (!approvalGate.canExecute(plan.planId)) {
+                val highRiskSteps = plan.steps.filter {
+                    it.riskLevel == com.example.core.approval.RiskLevel.HIGH ||
+                        it.riskLevel == com.example.core.approval.RiskLevel.CRITICAL
+                }
+                val riskSummary = highRiskSteps.joinToString { "${it.stepIndex}:${it.riskLevel}" }
+                val reason = "Task blocked before dispatch: explicit user approval is required for consequential step(s) [$riskSummary]. This build has no approval action connected to the execution gate; no task actions were dispatched."
+                repository.log("SECURITY", "ApprovalGate", reason, executionId)
+                completeExecution(
+                    executionId,
+                    ExecutionStatus.COMPLETED_FAILURE,
+                    reason,
+                    emptyList(),
+                    startTime,
+                    mode
+                )
+                return
+            }
         }
 
         // Live vs Benchmark Mode Enforcement (A02, A01)
-        if (mode == com.example.core.model.ExecutionMode.LIVE_DEVICE && LocalAgentAccessibilityService.instance == null) {
+        if (
+            mode == com.example.core.model.ExecutionMode.LIVE_DEVICE &&
+            (LocalAgentAccessibilityService.instance == null || !LocalAgentAccessibilityService.isServiceConnected.value)
+        ) {
             val requiresAccessibility = commands.any {
                 it is TaskCommand.ClickElement || it is TaskCommand.EnterText ||
                 it is TaskCommand.Scroll || it is TaskCommand.OpenDrawer ||
@@ -289,7 +325,12 @@ class AgentExecutionEngine(
             enforcePreExecutionSafetyCheck(executionId)
 
             // On-Device Cognitive Deliberation (Observe -> Assess -> Hypothesize -> Safety -> Action)
-            val preObs = _state.value.preSnapshot ?: _state.value.latestObservation ?: captureFreshObservation()
+            // Each step deliberates against the current live screen, never the previous step's stale pre-state.
+            val preObs = if (mode == com.example.core.model.ExecutionMode.LIVE_DEVICE) {
+                captureFreshObservation()
+            } else {
+                simulatedBenchmarkState
+            }
             val deliberatedThoughts = cognitiveBrain.deliberate(
                 prompt = prompt,
                 stepIndex = index + 1,
@@ -346,6 +387,12 @@ class AgentExecutionEngine(
                     }
                 }
 
+                repository.log(
+                    "JOURNAL",
+                    "StepAttempt",
+                    "Prepared attempt ${retryCount + 1} for step ${index + 1}/${commands.size} (${command.displayName}). If the process stops before verification is persisted, treat the outcome as uncertain and re-observe the device before any retry.",
+                    executionId
+                )
                 val stepResult = withTimeoutOrNull(stepTimeoutMs) {
                     executeSingleStep(
                         command = command,
@@ -377,7 +424,11 @@ class AgentExecutionEngine(
                         retryCount++
                         delay(500)
                     }
-                } else if (stepResult.status == StepStatus.SUCCESS || retryCount >= maxRetries) {
+                } else if (
+                    stepResult.status == StepStatus.SUCCESS ||
+                    retryCount >= maxRetries ||
+                    stepResult.verificationDetails.startsWith("SAFE_STOP:")
+                ) {
                     stepOutcome = stepResult
                 } else {
                     repository.log("WARN", "Engine", "Step ${index + 1} did not verify successfully (${stepResult.status}): ${stepResult.verificationDetails}. Retrying ($retryCount/$maxRetries)...", executionId)
@@ -421,6 +472,19 @@ class AgentExecutionEngine(
                     steps = executedRecords.toList(),
                     statusMessage = "Step ${index + 1} finished with status: ${finalRecord.status}"
                 )
+            }
+
+            if (finalRecord.verificationDetails.startsWith("SAFE_STOP:")) {
+                val reason = finalRecord.verificationDetails.removePrefix("SAFE_STOP:").trim()
+                completeExecution(
+                    executionId,
+                    ExecutionStatus.COMPLETED_FAILURE,
+                    reason,
+                    executedRecords,
+                    startTime,
+                    mode
+                )
+                return
             }
 
             if (finalRecord.status != StepStatus.SUCCESS) {
@@ -486,28 +550,34 @@ class AgentExecutionEngine(
         val useLive = mode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         val service = LocalAgentAccessibilityService.instance
 
-        if (useLive && service == null) {
-            val requiresService = command is TaskCommand.ClickElement || command is TaskCommand.EnterText ||
-                    command is TaskCommand.Scroll || command is TaskCommand.OpenDrawer ||
-                    command is TaskCommand.WaitForElement || command is TaskCommand.VerifyCondition
-            if (requiresService) {
-                return StepExecutionRecord(
-                    stepIndex = stepIndex,
-                    commandSummary = command.displayName,
-                    targetSelector = extractTargetSelectorDesc(command),
-                    dispatchedAction = null,
-                    preSnapshotId = null,
-                    postSnapshotId = null,
-                    status = StepStatus.FAILURE,
-                    verificationDetails = "Accessibility service unavailable in LIVE_DEVICE mode. Refusing to substitute simulated action.",
-                    durationMs = System.currentTimeMillis() - stepStartTime
-                )
-            }
+        val requiresLiveUiObservation =
+            command is TaskCommand.ClickElement ||
+                command is TaskCommand.EnterText ||
+                command is TaskCommand.Scroll ||
+                command is TaskCommand.OpenDrawer ||
+                command is TaskCommand.WaitForElement ||
+                (command is TaskCommand.VerifyCondition &&
+                    command.rule !is com.example.core.model.VerificationRule.AlwaysPass)
+
+        if (useLive && requiresLiveUiObservation &&
+            (service == null || !LocalAgentAccessibilityService.isServiceConnected.value)
+        ) {
+            return StepExecutionRecord(
+                stepIndex = stepIndex,
+                commandSummary = command.displayName,
+                targetSelector = extractTargetSelectorDesc(command),
+                dispatchedAction = null,
+                preSnapshotId = null,
+                postSnapshotId = null,
+                status = StepStatus.INCONCLUSIVE,
+                verificationDetails = "SAFE_STOP: Accessibility service is unavailable or disconnected in LIVE_DEVICE mode; refusing to dispatch UI actions or substitute simulated state.",
+                durationMs = System.currentTimeMillis() - stepStartTime
+            )
         }
 
         // 1. Capture Pre-Action Snapshot
-        val preSnapshot = if (useLive && service != null) {
-            service.captureLiveSnapshot()
+        val preSnapshot = if (useLive) {
+            service?.captureLiveSnapshot()
         } else {
             simulatedState
         }
@@ -520,6 +590,50 @@ class AgentExecutionEngine(
                 status = ExecutionStatus.RESOLVING_TARGET,
                 statusMessage = "Resolving target for: ${command.displayName}"
             )
+        }
+
+        // Enforce freshness and permission-consent checks at the executor boundary,
+        // not only inside ClickElement. This also protects text, scroll, drawer,
+        // wait, and verification commands from acting on stale or blocked UI.
+        if (useLive && requiresLiveUiObservation) {
+            val observationAgeMs = preSnapshot?.let { System.currentTimeMillis() - it.timestampMs }
+            val observationProblem = when {
+                preSnapshot == null -> "No live UI snapshot is available"
+                observationAgeMs == null -> "Live UI snapshot age could not be determined"
+                observationAgeMs < 0L -> "Live UI snapshot timestamp is in the future"
+                observationAgeMs > 4000L -> "Live UI snapshot is stale (${observationAgeMs}ms old; maximum age is 4000ms)"
+                else -> null
+            }
+            if (observationProblem != null) {
+                return StepExecutionRecord(
+                    stepIndex = stepIndex,
+                    commandSummary = command.displayName,
+                    targetSelector = extractTargetSelectorDesc(command),
+                    dispatchedAction = null,
+                    preSnapshotId = preSnapshot?.id,
+                    postSnapshotId = null,
+                    status = StepStatus.INCONCLUSIVE,
+                    verificationDetails = "SAFE_STOP: ${observationProblem}; refusing UI dispatch, exploration, retry, or automated recovery.",
+                    durationMs = System.currentTimeMillis() - stepStartTime
+                )
+            }
+        }
+
+        if (useLive && preSnapshot != null) {
+            val interruption = com.example.core.reflection.InterruptionDetector.assessSnapshot(preSnapshot)
+            if (interruption.type == com.example.core.reflection.InterruptionType.PERMISSION_DIALOG) {
+                return StepExecutionRecord(
+                    stepIndex = stepIndex,
+                    commandSummary = command.displayName,
+                    targetSelector = extractTargetSelectorDesc(command),
+                    dispatchedAction = null,
+                    preSnapshotId = preSnapshot.id,
+                    postSnapshotId = null,
+                    status = StepStatus.INCONCLUSIVE,
+                    verificationDetails = "SAFE_STOP: ${interruption.description} Explicit user authorization is required; no task action was dispatched.",
+                    durationMs = System.currentTimeMillis() - stepStartTime
+                )
+            }
         }
 
         var dispatchedActionDesc: String? = null
@@ -543,7 +657,49 @@ class AgentExecutionEngine(
                 _state.update { it.copy(status = ExecutionStatus.RESOLVING_TARGET) }
 
                 var effectiveSnapshot = preSnapshot
+                val observationAgeMs = effectiveSnapshot?.let { System.currentTimeMillis() - it.timestampMs }
+                if (useLive && (
+                    effectiveSnapshot == null ||
+                    observationAgeMs == null ||
+                    observationAgeMs > 4000L ||
+                    observationAgeMs < 0L
+                )) {
+                    val observationReason = when {
+                        effectiveSnapshot == null -> "No live UI snapshot is available"
+                        observationAgeMs == null -> "Live UI snapshot age could not be determined"
+                        observationAgeMs < 0L -> "Live UI snapshot timestamp is in the future"
+                        else -> "Live UI snapshot is stale (${observationAgeMs}ms old; maximum age is 4000ms)"
+                    }
+                    return StepExecutionRecord(
+                        stepIndex = stepIndex,
+                        commandSummary = command.displayName,
+                        targetSelector = command.selector.toReadableDescription(),
+                        dispatchedAction = null,
+                        preSnapshotId = effectiveSnapshot?.id,
+                        postSnapshotId = null,
+                        status = StepStatus.INCONCLUSIVE,
+                        verificationDetails = "SAFE_STOP: ${observationReason}; refusing click, scroll exploration, retry, and automated recovery.",
+                        durationMs = System.currentTimeMillis() - stepStartTime
+                    )
+                }
                 var resolution = resolver.resolve(command.selector, effectiveSnapshot)
+
+                if (useLive && service != null) {
+                    val interruption = com.example.core.reflection.InterruptionDetector.assessSnapshot(effectiveSnapshot)
+                    if (interruption.type == com.example.core.reflection.InterruptionType.PERMISSION_DIALOG) {
+                        return StepExecutionRecord(
+                            stepIndex = stepIndex,
+                            commandSummary = command.displayName,
+                            targetSelector = command.selector.toReadableDescription(),
+                            dispatchedAction = null,
+                            preSnapshotId = effectiveSnapshot?.id,
+                            postSnapshotId = null,
+                            status = StepStatus.INCONCLUSIVE,
+                            verificationDetails = "SAFE_STOP: ${interruption.description} Permission authorization is required; LocalAgent stopped this step without granting, dismissing, scrolling past, or retrying the dialog.",
+                            durationMs = System.currentTimeMillis() - stepStartTime
+                        )
+                    }
+                }
 
                 // Self-Healing Strategy 1: Check for Interruption/Modal Dialog (Permissions, System alerts, Popups)
                 if (resolution !is TargetResolver.ResolutionResult.Success && useLive && service != null) {
@@ -747,10 +903,10 @@ class AgentExecutionEngine(
         // 2. Capture Post-Action Snapshot (RULE: Fresh snapshot, never reuse pre-action!)
         _state.update { it.copy(status = ExecutionStatus.VERIFYING, statusMessage = "Capturing fresh post-action observation...") }
 
-        val postSnapshot = if (useLive && service != null) {
-            service.captureLiveSnapshot()
+        val postSnapshot = if (useLive) {
+            service?.captureLiveSnapshot()
         } else {
-            // For delay or general verification, return current benchmark state
+            // Simulated state is valid only in simulation/test modes, never as live-device evidence.
             simulatedState
         }
         SnapshotStorage.saveSnapshot(postSnapshot)
@@ -963,8 +1119,12 @@ class AgentExecutionEngine(
 
     fun captureFreshObservation(): UiSnapshot? {
         val service = LocalAgentAccessibilityService.instance
+        val isLiveExecution = _state.value.executionMode == com.example.core.model.ExecutionMode.LIVE_DEVICE
         val snapshot = if (service != null && LocalAgentAccessibilityService.isServiceConnected.value) {
             service.captureLiveSnapshot()
+        } else if (isLiveExecution) {
+            // No live service means no live observation. Never substitute benchmark state.
+            null
         } else {
             BenchmarkHarness.createCalculatorInitialSnapshot()
         }

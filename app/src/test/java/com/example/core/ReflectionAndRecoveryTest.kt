@@ -29,10 +29,11 @@ class ReflectionAndRecoveryTest {
         isEditable: Boolean = false,
         isFocused: Boolean = false,
         isScrollable: Boolean = false,
-        children: List<UiNode> = emptyList()
+        children: List<UiNode> = emptyList(),
+        packageName: String = "com.test.app"
     ): UiNode = UiNode(
         id = id,
-        packageName = "com.test.app",
+        packageName = packageName,
         className = className,
         text = text,
         contentDescription = null,
@@ -78,10 +79,29 @@ class ReflectionAndRecoveryTest {
 
         assertTrue("Should detect interruption in permission controller", assessment.isInterrupted)
         assertEquals("Should be PERMISSION_DIALOG type", InterruptionType.PERMISSION_DIALOG, assessment.type)
-        assertNotNull("Should provide dismiss command", assessment.dismissCommand)
+        assertEquals("Permission dialogs must never produce an automated grant/dismiss command", null, assessment.dismissCommand)
+        assertTrue("Permission dialog description must require user action", assessment.description.contains("explicit user action"))
+    }
 
-        val dismissCmd = assessment.dismissCommand as TaskCommand.ClickElement
-        assertEquals("Target should click 'While using the app'", "While using the app", dismissCmd.selector.text)
+    @Test
+    fun testInterruptionDetector_detectsPermissionControllerFromNodePackageWhenWindowPackageDiffers() {
+        val permissionNode = createNode(
+            id = "permission_root",
+            className = "android.widget.FrameLayout",
+            text = "Allow access?",
+            packageName = "com.android.permissioncontroller"
+        )
+        val snapshot = UiSnapshot(
+            packageName = "com.android.systemui",
+            rootNode = permissionNode,
+            totalNodeCount = 1,
+            isLive = true
+        )
+
+        val assessment = InterruptionDetector.assessSnapshot(snapshot)
+
+        assertEquals(InterruptionType.PERMISSION_DIALOG, assessment.type)
+        assertEquals(null, assessment.dismissCommand)
     }
 
     @Test
@@ -213,14 +233,15 @@ class ReflectionAndRecoveryTest {
     }
 
     @Test
-    fun testAutonomousRecoveryEngine_prioritizesInterruptionBypass() = runBlocking {
+    fun testAutonomousRecoveryEngine_stopsForPermissionConsent() = runBlocking {
         val recoveryEngine = AutonomousRecoveryEngine()
 
         val allowButton = createNode(
             id = "btn_allow",
             className = "android.widget.Button",
             text = "While using the app",
-            isClickable = true
+            isClickable = true,
+            packageName = "com.google.android.permissioncontroller"
         )
         val interruptedSnapshot = UiSnapshot(
             packageName = "com.google.android.permissioncontroller",
@@ -241,9 +262,8 @@ class ReflectionAndRecoveryTest {
             durableStorage = null
         )
 
-        assertTrue("Strategy name should mention Interruption Bypass", plan.strategyName.contains("Interruption Bypass"))
-        assertEquals("First step must dismiss/grant interruption", 3, plan.alternativeCommands.size)
-        assertTrue(plan.alternativeCommands[0] is TaskCommand.ClickElement)
-        assertEquals(failedAction, plan.alternativeCommands[2])
+        assertTrue("Recovery must explicitly request user consent", plan.strategyName.contains("Permission Consent Required"))
+        assertTrue("Permission recovery must not synthesize any action", plan.alternativeCommands.isEmpty())
+        assertTrue("Reasoning must state why recovery stopped", plan.reasoning.contains("explicit user action"))
     }
 }
